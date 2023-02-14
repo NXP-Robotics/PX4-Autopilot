@@ -254,7 +254,78 @@ void LandingTargetEstimator::_update_topics()
 		_target_position_report.rel_pos_x += _params.offset_x;
 		_target_position_report.rel_pos_y += _params.offset_y;
 
-		_new_irlockReport = true;
+		_new_sensorReport = true;
+
+	} else if (_sensorUwbSub.update(&_sensorUwb)) {
+
+		if (!_vehicleAttitude_valid || !_vehicleLocalPosition_valid) {
+			// don't have the data needed for an update
+			PX4_INFO("Attitude: %d, Local pos: %d", _vehicleAttitude_valid, _vehicleLocalPosition_valid);
+			return;
+		}
+
+		if (!PX4_ISFINITE(_sensorUwb.distance)) {
+			PX4_WARN("Data is corrupt!");
+			return;
+		}
+
+		// First we need to catch angle measurements outside of the useable measuring range
+		if ((float)(60.0) <= _sensorUwb.aoa_azimuth_dev || (float)(-60.0) >= _sensorUwb.aoa_azimuth_dev) {
+			return;
+		}
+
+		if ((float) 60.0 <= _sensorUwb.aoa_elevation_dev  || (float) -60.0 >= _sensorUwb.aoa_elevation_dev) {
+			return;
+		}
+
+		_new_sensorReport = true;
+		_target_position_report.timestamp = _sensorUwb.timestamp;
+
+		const float deg2rad = M_PI / 180.0;
+		float azimuth 	 = _sensorUwb.aoa_azimuth_dev *  deg2rad; 	//subtract yaw offset and convert to rad
+		float elevation = _sensorUwb.aoa_elevation_dev  * deg2rad; 	//subtract pitch offset and convert to rad
+
+		/* ****** Position algorithm ************************************
+		 * this algorithm takes distance and angle measurements (spherical coordinates) and converts them into the cartesian bodyframe expected by the LTE
+		 * Convert spherical coordinates to cartesian: sph(r, phi, theta) => cartesian(x,y,z)
+		 * With radial distance r, elevation angle theta, azimuth angle phi
+		 *
+		 * position =   ( r * cos(elevation) * cos(azimuth),
+		 * 		( r * cos(elevation) * sin(azimuth),
+		 * 		( r * sin(elevation) )
+		 *
+		 * The resulting coordinate system is not NED (north-east-down)
+		 * Using the angle information from the drone device results in a position where the Drone is centered at [0, 0, 0] in NED.
+		 * ||Using the angle information from the destination device results in a position where the ground device is centered at [0, 0, 0] in NED.||
+		 * The coordinates "rel_pos_*" are the position of the landing point relative to the vehicle.
+		 * To change POV we negate rotate the position with Eulerangles[XYZ] = [-90 0 -90]:
+		 *
+		 * rotation_matrix = (0, 1, 0,
+					0, 0, 1;
+					-1, 0, 0);
+		 *
+		 * This step can also be skipped if we rearrange the position calculation like this:
+		 * 	X -> -Z
+		 * 	Y -> X
+		 * 	Z -> Y
+		 * Resulting in the following conversion function:
+		 * ******************************************/
+		matrix::Vector3f _position = - matrix::Vector3f{(_sensorUwb.distance  * sinf(azimuth) * cosf(elevation)),
+				 (_sensorUwb.distance  * sinf(elevation)),
+				 (_sensorUwb.distance * cosf(azimuth) * cosf(elevation))};
+		// Now the position is the landing point relative to the vehicle.
+		//Rotate around orientation:
+		_position = get_rot_matrix(static_cast<enum Rotation>(_sensorUwb.orientation)) *
+			    _position; //cast the orientatio to Rotation enum
+		// And add the initiator offset:
+		_position +=  matrix::Vector3f(_sensorUwb.offset_x,  _sensorUwb.offset_y,  _sensorUwb.offset_z);
+
+
+
+		// Now we negate every axis to get the Position of the drone relative to the landing spot:
+		_target_position_report.rel_pos_x = _position(0);
+		_target_position_report.rel_pos_y = _position(1);
+		_target_position_report.rel_pos_z = _position(2);
 	}
 }
 
