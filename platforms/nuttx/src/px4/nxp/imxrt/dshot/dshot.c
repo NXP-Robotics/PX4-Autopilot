@@ -145,6 +145,173 @@ int up_dshot_init(uint32_t channel_mask, unsigned dshot_pwm_freq, bool enable_bi
 	return channel_mask;
 }
 
+void up_bdshot_training(uint32_t channel, uint32_t value)
+{
+	dshot_channel_t *ch = &dshot_inst[channel];
+
+	if (value == BDSHOT_ZERO_RESPONSE) {
+		// Count successful responses
+		ch->bdshot_training_success++;
+
+	} else if ((value & 0x1) == 0) {
+		// Invalidate frame error immediately
+		ch->bdshot_training_count = BDSHOT_TRAINING_TRIES - 1;
+	}
+
+	// Keep count and check if a training round finished
+	ch->bdshot_training_count++;
+
+	if (ch->bdshot_training_count == BDSHOT_TRAINING_TRIES) {
+		if (ch->bdshot_training_success >= BDSHOT_TRAINING_SUCCESS) {
+			ch->bdshot_training_mask |=
+				(1 << BDSHOT_TCMP_TO_MASK(ch->bdshot_tcmp_offset));
+		}
+
+		ch->bdshot_training_count = 0;
+		ch->bdshot_training_success = 0;
+		ch->bdshot_tcmp_offset++;
+
+		if (ch->bdshot_tcmp_offset == BDSHOT_TCMP_MAX_OFFSET) {
+
+			if (ch->bdshot_training_mask == 0) {
+				// No candidates retry
+				ch->bdshot_tcmp_offset = BDSHOT_TCMP_MIN_OFFSET;
+
+			} else {
+				// Training done, use mask to find best offset
+				int low  = __builtin_ctz(ch->bdshot_training_mask);
+				int high = 31 - __builtin_clz(ch->bdshot_training_mask);
+				ch->bdshot_tcmp_offset = ((low + high) / 2) + BDSHOT_TCMP_MIN_OFFSET;
+				ch->bdshot_training_done = true;
+			}
+		}
+
+		// Update TCMP
+		flexio_dshot_set_tcmp(channel);
+	}
+}
+
+void up_bdshot_erpm(void)
+{
+	uint32_t value;
+	uint32_t data;
+	uint32_t csum_data;
+	uint8_t exponent;
+	uint16_t period;
+	uint16_t erpm;
+
+	bdshot_parsed_recv_mask = 0;
+
+	bdshot_parsed_recv_mask = 0;
+
+	// Decode each individual channel
+	for (uint8_t channel = 0; (channel < DSHOT_TIMERS); channel++) {
+		if (bdshot_recv_mask & (1 << channel)) {
+			value = ~dshot_inst[channel].raw_response & 0xFFFFF;
+
+			// BDSHOT ESC hardware varies and timings differ between units.
+			// Run training to estimate the correct baudrate to lock onto.
+			if (!dshot_inst[channel].bdshot_training_done) {
+				up_bdshot_training(channel, value);
+
+			} else if (value & 0x1) { /* if lowest significant isn't 1 we've got a framing error */
+				/* Decode RLL */
+				value = (value ^ (value >> 1));
+
+				/* Decode GCR */
+				data = gcr_decode[value & 0x1fU];
+				data |= gcr_decode[(value >> 5U) & 0x1fU] << 4U;
+				data |= gcr_decode[(value >> 10U) & 0x1fU] << 8U;
+				data |= gcr_decode[(value >> 15U) & 0x1fU] << 12U;
+
+				/* Calculate checksum */
+				csum_data = data;
+				csum_data = csum_data ^ (csum_data >> 8U);
+				csum_data = csum_data ^ (csum_data >> NIBBLES_SIZE);
+
+				if ((csum_data & 0xFU) != 0xFU) {
+					dshot_inst[channel].crc_error_cnt++;
+
+				} else {
+					data = (data >> 4) & 0xFFF;
+
+					if (data == 0xFFF) {
+						erpm = 0;
+
+					} else {
+						exponent = ((data >> 9U) & 0x7U); /* 3 bit: exponent */
+						period = (data & 0x1ffU); /* 9 bit: period base */
+						period = period << exponent; /* Period in usec */
+						erpm = ((1000000U * 60U / 100U + period / 2U) / period);
+					}
+
+					dshot_inst[channel].erpm = erpm;
+					bdshot_parsed_recv_mask |= (1 << channel);
+					dshot_inst[channel].last_no_response_cnt = dshot_inst[channel].no_response_cnt;
+				}
+
+			} else {
+				dshot_inst[channel].frame_error_cnt++;
+			}
+		}
+	}
+
+	bdshot_parsed_recv_mask = bdshot_recv_mask;
+}
+
+
+int up_bdshot_num_erpm_ready(void)
+{
+	int num_ready = 0;
+
+	for (unsigned i = 0; i < DSHOT_TIMERS; ++i) {
+		// We only check that data has been received, rather than if it's valid.
+		// This ensures data is published even if one channel has bit errors.
+		if (bdshot_recv_mask & (1 << i)) {
+			++num_ready;
+		}
+	}
+
+	return num_ready;
+}
+
+
+int up_bdshot_get_erpm(uint8_t channel, int *erpm)
+{
+	if (bdshot_parsed_recv_mask & (1 << channel)) {
+		*erpm = (int)dshot_inst[channel].erpm;
+		return 0;
+	}
+
+	return -1;
+}
+
+int up_bdshot_channel_status(uint8_t channel)
+{
+	if (channel < DSHOT_TIMERS) {
+		return ((dshot_inst[channel].no_response_cnt - dshot_inst[channel].last_no_response_cnt) < BDSHOT_OFFLINE_COUNT);
+	}
+
+	return -1;
+}
+
+void up_bdshot_status(void)
+{
+
+	for (uint8_t channel = 0; (channel < DSHOT_TIMERS); channel++) {
+
+		if (dshot_inst[channel].init) {
+			PX4_INFO("Channel %i %s Last erpm %i value", channel, up_bdshot_channel_status(channel) ? "online" : "offline",
+				 dshot_inst[channel].erpm);
+			PX4_INFO("BDSHOT Training done: %s TCMP offset: %d", dshot_inst[channel].bdshot_training_done ? "YES" : "NO",
+				 dshot_inst[channel].bdshot_tcmp_offset);
+			PX4_INFO("CRC errors Frame error No response");
+			PX4_INFO("%10lu %11lu %11lu", dshot_inst[channel].crc_error_cnt, dshot_inst[channel].frame_error_cnt,
+				 dshot_inst[channel].no_response_cnt);
+		}
+	}
+}
+
 void up_dshot_trigger(void)
 {
 	clear_timer_status_flags(0xFF);
@@ -158,6 +325,9 @@ void up_dshot_trigger(void)
 			flexio_putreg32(dshot_inst[channel].data_seg1, IMXRT_FLEXIO_SHIFTBUF0_OFFSET + channel * 0x4);
 		}
 	}
+
+	// Calc data now since we're not event driven
+	up_bdshot_erpm();
 
 	bdshot_recv_mask = 0x0;
 
