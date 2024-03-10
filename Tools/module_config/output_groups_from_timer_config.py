@@ -55,12 +55,21 @@ def extract_timer_from_channel(line, num_channels_already_found):
 
     return None
 
+def imxrt_is_dshot(line):
+
+    # NXP FlexPWM format format: initIOPWM(PWM::FlexPWM2),
+    search = re.search('(initIOPWMDshot)', line, re.IGNORECASE)
+    if search:
+        return True
+
+    return False
+
 def get_timer_groups(timer_config_file, verbose=False):
     with open(timer_config_file, 'r') as f:
         timer_config = f.read()
 
     # timers
-    dshot_support = {} # key: timer
+    dshot_support = {str(i): False for i in range(16)}
     timers_start_marker = 'io_timers_t io_timers'
     timers_start = timer_config.find(timers_start_marker)
     if timers_start == -1:
