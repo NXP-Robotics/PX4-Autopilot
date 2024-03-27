@@ -52,6 +52,28 @@
 #define NIBBLES_SIZE 			4u
 #define DSHOT_NUMBER_OF_NIBBLES		3u
 
+#if defined(IOMUX_PULL_UP_47K)
+#define IOMUX_PULL_UP IOMUX_PULL_UP_47K
+#endif
+
+static const uint32_t gcr_decode[32] = {
+	0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0,
+	0x0, 0x9, 0xA, 0xB, 0x0, 0xD, 0xE, 0xF,
+	0x0, 0x0, 0x2, 0x3, 0x0, 0x5, 0x6, 0x7,
+	0x0, 0x0, 0x8, 0x1, 0x0, 0x4, 0xC, 0x0
+};
+
+uint32_t erpms[DSHOT_TIMERS];
+
+typedef enum {
+	DSHOT_START = 0,
+	DSHOT_12BIT_FIFO,
+	DSHOT_12BIT_TRANSFERRED,
+	DSHOT_TRANSMIT_COMPLETE,
+	BDSHOT_RECEIVE,
+	BDSHOT_RECEIVE_COMPLETE,
+} dshot_state;
+
 typedef struct dshot_handler_t {
 	bool			init;
 	uint32_t 		data_seg1;
@@ -87,6 +109,76 @@ static int flexio_irq_handler(int irq, void *context, void *arg)
 				}
 			}
 		}
+	}
+
+	flags = get_timer_status_flags();
+
+	for (channel = 0; flags; (channel = (channel + 1) % DSHOT_TIMERS)) {
+		flags = get_timer_status_flags();
+
+		if (flags & (1 << channel)) {
+			clear_timer_status_flags(1 << channel);
+
+			if (dshot_inst[channel].state == DSHOT_12BIT_FIFO) {
+				dshot_inst[channel].state = DSHOT_12BIT_TRANSFERRED;
+
+			} else if (!dshot_inst[channel].bdshot && dshot_inst[channel].state == DSHOT_12BIT_TRANSFERRED) {
+				dshot_inst[channel].state = DSHOT_TRANSMIT_COMPLETE;
+
+			} else if (dshot_inst[channel].bdshot && dshot_inst[channel].state == DSHOT_12BIT_TRANSFERRED) {
+				disable_shifter_status_interrupts(1 << channel);
+				dshot_inst[channel].state = BDSHOT_RECEIVE;
+
+				/* Transmit done, disable timer and reconfigure to receive*/
+				flexio_putreg32(0x0, IMXRT_FLEXIO_TIMCTL0_OFFSET + channel * 0x4);
+
+				/* Input data from pin, no start/stop bit*/
+				flexio_putreg32(FLEXIO_SHIFTCFG_INSRC(FLEXIO_SHIFTER_INPUT_FROM_PIN) |
+						FLEXIO_SHIFTCFG_PWIDTH(0) |
+						FLEXIO_SHIFTCFG_SSTOP(FLEXIO_SHIFTER_STOP_BIT_DISABLE) |
+						FLEXIO_SHIFTCFG_SSTART(FLEXIO_SHIFTER_START_BIT_DISABLED_LOAD_DATA_ON_SHIFT),
+						IMXRT_FLEXIO_SHIFTCFG0_OFFSET + channel * 0x4);
+
+				/* Shifter receive mdoe, on FXIO pin input */
+				flexio_putreg32(FLEXIO_SHIFTCTL_TIMSEL(channel) |
+						FLEXIO_SHIFTCTL_TIMPOL(FLEXIO_SHIFTER_TIMER_POLARITY_ON_POSITIVE) |
+						FLEXIO_SHIFTCTL_PINCFG(FLEXIO_PIN_CONFIG_OUTPUT_DISABLED) |
+						FLEXIO_SHIFTCTL_PINSEL(timer_io_channels[channel].dshot.flexio_pin) |
+						FLEXIO_SHIFTCTL_PINPOL(FLEXIO_PIN_ACTIVE_LOW) |
+						FLEXIO_SHIFTCTL_SMOD(FLEXIO_SHIFTER_MODE_RECEIVE),
+						IMXRT_FLEXIO_SHIFTCTL0_OFFSET + channel * 0x4);
+
+				/* Make sure there no shifter flags high from transmission */
+				clear_shifter_status_flags(1 << channel);
+
+				/* Enable on pin transition, resychronize through reset on rising edge */
+				flexio_putreg32(FLEXIO_TIMCFG_TIMOUT(FLEXIO_TIMER_OUTPUT_ONE_AFFECTED_BY_RESET) |
+						FLEXIO_TIMCFG_TIMDEC(FLEXIO_TIMER_DEC_SRC_ON_FLEX_IO_CLOCK_SHIFT_TIMER_OUTPUT) |
+						FLEXIO_TIMCFG_TIMRST(FLEXIO_TIMER_RESET_ON_TIMER_PIN_RISING_EDGE) |
+						FLEXIO_TIMCFG_TIMDIS(FLEXIO_TIMER_DISABLE_ON_TIMER_COMPARE) |
+						FLEXIO_TIMCFG_TIMENA(FLEXIO_TIMER_ENABLE_ON_TRIGGER_BOTH_EDGE) |
+						FLEXIO_TIMCFG_TSTOP(FLEXIO_TIMER_STOP_BIT_ENABLE_ON_TIMER_DISABLE) |
+						FLEXIO_TIMCFG_TSTART(FLEXIO_TIMER_START_BIT_ENABLED),
+						IMXRT_FLEXIO_TIMCFG0_OFFSET + channel * 0x4);
+
+				/* Enable on pin transition, resychronize through reset on rising edge */
+				flexio_putreg32(bdshot_tcmp, IMXRT_FLEXIO_TIMCMP0_OFFSET + channel * 0x4);
+
+				/* Trigger on FXIO pin transition, Baud mode */
+				flexio_putreg32(FLEXIO_TIMCTL_TRGSEL(2 * timer_io_channels[channel].dshot.flexio_pin) |
+						FLEXIO_TIMCTL_TRGPOL(FLEXIO_TIMER_TRIGGER_POLARITY_ACTIVE_HIGH) |
+						FLEXIO_TIMCTL_TRGSRC(FLEXIO_TIMER_TRIGGER_SOURCE_INTERNAL) |
+						FLEXIO_TIMCTL_PINCFG(FLEXIO_PIN_CONFIG_OUTPUT_DISABLED) |
+						FLEXIO_TIMCTL_PINSEL(0) |
+						FLEXIO_TIMCTL_PINPOL(FLEXIO_PIN_ACTIVE_LOW) |
+						FLEXIO_TIMCTL_TIMOD(FLEXIO_TIMER_MODE_DUAL8_BIT_BAUD_BIT),
+						IMXRT_FLEXIO_TIMCTL0_OFFSET + channel * 0x4);
+
+				/* Enable shifter interrupt for receiving data */
+				enable_shifter_status_interrupts(1 << channel);
+			}
+		}
+
 	}
 
 	return OK;
@@ -245,21 +337,8 @@ void up_bdshot_erpm(void)
 					dshot_inst[channel].crc_error_cnt++;
 
 				} else {
-					data = (data >> 4) & 0xFFF;
-
-					if (data == 0xFFF) {
-						erpm = 0;
-
-					} else {
-						exponent = ((data >> 9U) & 0x7U); /* 3 bit: exponent */
-						period = (data & 0x1ffU); /* 9 bit: period base */
-						period = period << exponent; /* Period in usec */
-						erpm = ((1000000U * 60U / 100U + period / 2U) / period);
-					}
-
-					dshot_inst[channel].erpm = erpm;
+					dshot_inst[channel].erpm = ~(erpm >> 4) & 0xFFF;
 					bdshot_parsed_recv_mask |= (1 << channel);
-					dshot_inst[channel].last_no_response_cnt = dshot_inst[channel].no_response_cnt;
 				}
 
 			} else {
@@ -267,8 +346,6 @@ void up_bdshot_erpm(void)
 			}
 		}
 	}
-
-	bdshot_parsed_recv_mask = bdshot_recv_mask;
 }
 
 
@@ -342,9 +419,6 @@ void up_dshot_trigger(void)
 			flexio_putreg32(dshot_inst[channel].data_seg1, IMXRT_FLEXIO_SHIFTBUF0_OFFSET + channel * 0x4);
 		}
 	}
-
-	// Calc data now since we're not event driven
-	up_bdshot_erpm();
 
 	bdshot_recv_mask = 0x0;
 
