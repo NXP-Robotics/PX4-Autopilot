@@ -50,7 +50,6 @@
 // Auto-generated header to all uORB <-> CDR conversions
 #include <uorb_pubsub_factory.hpp>
 
-
 #define Z_PUBLISH
 #define Z_SUBSCRIBE
 
@@ -73,6 +72,9 @@ void ZENOH::run()
 	char locator[NET_LOCATOR_SIZE];
 	int8_t ret;
 	int i;
+
+	px4_guid_t px4_guid;
+	board_get_px4_guid(px4_guid);
 
 	Zenoh_Config z_config;
 
