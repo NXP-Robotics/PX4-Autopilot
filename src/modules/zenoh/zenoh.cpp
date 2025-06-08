@@ -110,6 +110,7 @@ void ZENOH::run()
 	{
 		char topic[TOPIC_INFO_SIZE];
 		char type[TOPIC_INFO_SIZE];
+		int instance_no;
 
 		for (i = 0; i < _sub_count; i++) {
 			z_config.getSubscriberMapping(topic, type);
@@ -137,6 +138,7 @@ void ZENOH::run()
 	{
 		char topic[TOPIC_INFO_SIZE];
 		char type[TOPIC_INFO_SIZE];
+		int instance;
 
 		for (i = 0; i < _pub_count; i++) {
 			z_config.getPublisherMapping(topic, type);
@@ -232,8 +234,10 @@ Zenoh demo bridge
 	PRINT_MODULE_USAGE_COMMAND("stop");
 	PRINT_MODULE_USAGE_COMMAND("status");
 	PRINT_MODULE_USAGE_COMMAND("config");
-	PX4_INFO_RAW("     addpublisher  <zenoh_topic> <uorb_topic>  Publish uORB topic to Zenoh\n");
-	PX4_INFO_RAW("     addsubscriber <zenoh_topic> <uorb_topic>  Publish Zenoh topic to uORB\n");
+	PX4_INFO_RAW("     add publisher  <zenoh_topic> <uorb_topic> <optional uorb_instance>  Publish uORB topic to Zenoh\n");
+	PX4_INFO_RAW("     add subscriber <zenoh_topic> <uorb_topic> <optional uorb_instance>  Publish Zenoh topic to uORB\n");
+	PX4_INFO_RAW("     delete publisher  <zenoh_topic>\n");
+	PX4_INFO_RAW("     delete subscriber <zenoh_topic>\n");
 	PX4_INFO_RAW("     net           <mode> <locator>            Zenoh network mode\n");
 	PX4_INFO_RAW("          <mode>    values: client|peer   \n");
 	PX4_INFO_RAW("          <locator> client: locator address for router\n");

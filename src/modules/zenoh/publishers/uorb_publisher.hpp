@@ -55,7 +55,12 @@ public:
 		_uorb_meta{meta},
 		_cdr_ops(ops)
 	{
-		_uorb_sub = orb_subscribe(meta);
+		if (instance <= 0) { // default (<0) or =0
+			_uorb_sub = orb_subscribe(meta);
+
+		} else { // otherwise
+			_uorb_sub = orb_subscribe_multi(meta, instance);
+		}
 	};
 
 	~uORB_Zenoh_Publisher() override = default;

@@ -54,8 +54,13 @@ public:
 		_uorb_meta{meta},
 		_cdr_ops(ops)
 	{
-		int instance = 0;
-		_uorb_pub_handle = orb_advertise_multi(_uorb_meta, nullptr, &instance);
+		if (d_instance < 0) { // default=-1; allocate a new instance
+			int instance;
+			_uorb_pub_handle = orb_advertise_multi(_uorb_meta, nullptr, &instance);
+
+		} else {
+			_uorb_pub_handle = orb_advertise(_uorb_meta, nullptr);
+		}
 	};
 
 	~uORB_Zenoh_Subscriber() override = default;
