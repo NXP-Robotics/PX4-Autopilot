@@ -77,7 +77,10 @@ private:
 			msg.x = target.x_rel;
 			msg.y = target.y_rel;
 			msg.z = target.z_rel;
-			//target.q.copyTo(msg..q);
+			msg.q[0] = target.q[0];
+			msg.q[1] = target.q[1];
+			msg.q[2] = target.q[2];
+			msg.q[3] = target.q[3];
 			msg.position_valid = target.rel_pos_valid;
 
 
