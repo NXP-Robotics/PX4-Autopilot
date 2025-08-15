@@ -289,6 +289,8 @@ int UWB_SR150::collectData()
 {
 	uint8_t *buffer = (uint8_t *) &_distance_result_msg;
 
+	uint8_t uwb_sensor_active = false; //sensor activity check
+
 	FD_ZERO(&_uart_set);
 	FD_SET(_uart, &_uart_set);
 	_uart_timeout.tv_sec = MESSAGE_TIMEOUT_S ;
@@ -377,11 +379,14 @@ int UWB_SR150::collectData()
 
 		_sensor_uwb_pub.publish(_sensor_uwb);
 
+		uwb_sensor_active = true;
+
 	} else {
 		perf_count(_read_err_perf);
 
-		if (buffer_location == 0) {
-			PX4_WARN("UWB module is not responding.");
+		if (buffer_location == 0 && uwb_sensor_active == true) {
+			PX4_INFO("UWB module is not responding.");
+			uwb_sensor_active = false;
 		}
 	}
 

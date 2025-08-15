@@ -259,24 +259,22 @@ void LandingTargetEstimator::_update_topics()
 
 		if (!_vehicleAttitude_valid || !_vehicleLocalPosition_valid) {
 			// don't have the data needed for an update
-			PX4_INFO("Attitude: %d, Local pos: %d", _vehicleAttitude_valid, _vehicleLocalPosition_valid);
+			//PX4_INFO("Attitude: %d, Local pos: %d", _vehicleAttitude_valid, _vehicleLocalPosition_valid);
 			return;
 		}
 
 		if (!PX4_ISFINITE(_sensorUwb.distance)) {
-			PX4_WARN("Data is corrupt!");
+			PX4_INFO("Data is corrupt!"); //failed message counter
 			return;
 		}
 
 		const float aoa_limit = 60.0;
 
 		// First we need to catch angle measurements outside of the useable measuring range
-		if (aoa_limit  <= _sensorUwb.aoa_azimuth_dev || -aoa_limit  >= _sensorUwb.aoa_azimuth_dev) {
+		if (aoa_limit  <= _sensorUwb.aoa_azimuth_dev || -aoa_limit  >= _sensorUwb.aoa_azimuth_dev ||
+				aoa_limit  <= _sensorUwb.aoa_elevation_dev  || -aoa_limit  >= _sensorUwb.aoa_elevation_dev){
 			return;
-		}
-
-		if (aoa_limit  <= _sensorUwb.aoa_elevation_dev  || -aoa_limit  >= _sensorUwb.aoa_elevation_dev) {
-			return;
+		}else{
 		}
 
 
