@@ -174,6 +174,16 @@ void LandingTargetEstimator::update()
 				_target_pose.abs_pos_valid = false;
 			}
 
+			_target_pose.timestamp 	= _target_position_report.timestamp;
+			_target_pose.frame 	= _target_position_report.frame;
+			_target_pose.num 	= _target_position_report.num;
+			_target_pose.type 	= _target_position_report.type;
+			_target_pose.angle_x 	= _target_position_report.angle_x;
+			_target_pose.angle_y 	= _target_position_report.angle_y;
+			_target_pose.size_x 	= _target_position_report.size_x;
+			_target_pose.size_y 	= _target_position_report.size_y;
+			_target_pose.distance 	= _target_position_report.distance;
+
 			_targetPosePub.publish(_target_pose);
 
 			_last_update = hrt_absolute_time();
@@ -279,6 +289,15 @@ void LandingTargetEstimator::_update_topics()
 
 
 		_target_position_report.timestamp = _sensorUwb.timestamp;
+		_target_position_report.frame = 1; //MAV_FRAME_LOCAL_NED;
+		_target_position_report.num =(uint8_t) _sensorUwb.mac;
+		_target_position_report.type = 1;  //LANDING_TARGET_TYPE_RADIO_BEACON;
+		_target_position_report.angle_x = _sensorUwb.aoa_elevation_dev;
+		_target_position_report.angle_y  = _sensorUwb.aoa_azimuth_dev;
+		_target_position_report.size_x  = _sensorUwb.aoa_elevation_resp;
+		_target_position_report.size_y = _sensorUwb.aoa_azimuth_resp;
+		_target_position_report.distance = _sensorUwb.distance;
+		//_target_position_report.q;
 
 		/* ****** Position algorithm ************************************
 		 * this algorithm takes distance and angle measurements (spherical coordinates) and converts them into the cartesian bodyframe expected by the LTE

@@ -66,11 +66,20 @@ private:
 			mavlink_landing_target_t msg{};
 
 			msg.time_usec = target.timestamp;
-			msg.frame = MAV_FRAME_LOCAL_NED;
+			msg.frame = target.frame;
+			msg.target_num = target.num;
+			msg.type = target.type;
+			msg.angle_x = target.angle_x;
+			msg.angle_y = target.angle_y;
+			msg.size_x = target.size_x;
+			msg.size_y = target.size_y;
+			msg.distance = target.distance;
 			msg.x = target.x_rel;
 			msg.y = target.y_rel;
 			msg.z = target.z_rel;
+			//target.q.copyTo(msg..q);
 			msg.position_valid = target.rel_pos_valid;
+
 
 			mavlink_msg_landing_target_send_struct(_mavlink->get_channel(), &msg);
 			return true;
