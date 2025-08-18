@@ -274,9 +274,7 @@ void LandingTargetEstimator::_update_topics()
 		if (aoa_limit  <= _sensorUwb.aoa_azimuth_dev || -aoa_limit  >= _sensorUwb.aoa_azimuth_dev ||
 				aoa_limit  <= _sensorUwb.aoa_elevation_dev  || -aoa_limit  >= _sensorUwb.aoa_elevation_dev){
 			return;
-		}else{
 		}
-
 
 		_target_position_report.timestamp = _sensorUwb.timestamp;
 
