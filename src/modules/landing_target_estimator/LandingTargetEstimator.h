@@ -67,6 +67,8 @@ using namespace time_literals;
 namespace landing_target_estimator
 {
 
+matrix::Vector3f calc_cartesian(float r, float azimuth, float elevation);
+
 class LandingTargetEstimator
 {
 public:
@@ -153,6 +155,7 @@ private:
 		float rel_pos_x;
 		float rel_pos_y;
 		float rel_pos_z;
+		float q[4];
 	} _target_position_report;
 
 	uORB::Subscription _vehicleLocalPositionSub{ORB_ID(vehicle_local_position)};
