@@ -96,6 +96,9 @@ protected:
 	/* timeout after which filter is reset if target not seen */
 	static constexpr uint32_t landing_target_estimator_TIMEOUT_US = 2000000;
 
+	/* Valid AoA measurement range between -60.00° and +60.00° for UWB*/
+	static constexpr float max_uwb_aoa_angle_degree = 60.0f;
+
 	uORB::Publication<landing_target_pose_s> _targetPosePub{ORB_ID(landing_target_pose)};
 	landing_target_pose_s _target_pose{};
 

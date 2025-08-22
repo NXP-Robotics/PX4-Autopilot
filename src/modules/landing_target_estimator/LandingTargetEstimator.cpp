@@ -278,11 +278,9 @@ void LandingTargetEstimator::_update_topics()
 			return;
 		}
 
-
-
 		// First we need to catch angle measurements outside of the useable measuring range
-		const float aoa_limit = 60.0;
-		if (aoa_limit  < abs(_sensorUwb.aoa_azimuth_dev) || aoa_limit  < abs(_sensorUwb.aoa_elevation_dev)){
+		if ( fabsf(uwb_report.aoa_azimuth_dev) > max_uwb_aoa_angle_degree ||
+	    		fabsf(uwb_report.aoa_elevation_dev) > max_uwb_aoa_angle_degree){
 			return;
 		}
 
