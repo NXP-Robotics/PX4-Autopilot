@@ -112,7 +112,7 @@ void LandingTargetEstimator::update()
 	if (!_estimator_initialized) {
 		float vx_init = _vehicleLocalPosition.v_xy_valid ? -_vehicleLocalPosition.vx : 0.f;
 		float vy_init = _vehicleLocalPosition.v_xy_valid ? -_vehicleLocalPosition.vy : 0.f;
-		PX4_INFO("Init %.2f %.2f", (double)vx_init, (double)vy_init);
+		//PX4_INFO("Init %.2f %.2f", (double)vx_init, (double)vy_init);
 		_kalman_filter_x.init(_target_position_report.rel_pos_x, vx_init, _params.pos_unc_init, _params.vel_unc_init);
 		_kalman_filter_y.init(_target_position_report.rel_pos_y, vy_init, _params.pos_unc_init, _params.vel_unc_init);
 
@@ -129,7 +129,7 @@ void LandingTargetEstimator::update()
 		if (!update_x || !update_y) {
 			if (!_faulty) {
 				_faulty = true;
-				PX4_INFO("Landing target measurement rejected:%s%s", update_x ? "" : " x", update_y ? "" : " y");
+				//PX4_INFO("Landing target measurement rejected:%s%s", update_x ? "" : " x", update_y ? "" : " y");
 			}
 
 		} else {
@@ -264,7 +264,7 @@ void LandingTargetEstimator::_update_topics()
 		}
 
 		if (!PX4_ISFINITE(_sensorUwb.distance)) {
-			PX4_INFO("Data is corrupt!"); //failed message counter
+			PX4_INFO("Data is corrupt!");
 			return;
 		}
 
@@ -347,6 +347,5 @@ void LandingTargetEstimator::_update_params()
 	param_get(_paramHandle.offset_y, &_params.offset_y);
 	param_get(_paramHandle.offset_z, &_params.offset_z);
 }
-
 
 } // namespace landing_target_estimator
