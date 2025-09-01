@@ -24,3 +24,19 @@ bool abs_pos_valid		# Flag showing whether absolute position is valid
 float32 x_abs			# X/north position of target, relative to origin (navigation frame) [meters]
 float32 y_abs			# Y/east position of target, relative to origin (navigation frame) [meters]
 float32 z_abs			# Z/down position of target, relative to origin (navigation frame) [meters]
+
+#Mavlink Extension:
+uint8 num			# The ID of the target if multiple targets are present
+float32 angle_x			# X-axis angular offset of the target from the center of the image
+float32 angle_y			# y-axis angular offset of the target from the center of the image
+float32 distance		# Distance to the target from the vehicle
+float32 size_x			# Size of target along x-axis
+float32 size_y			# Size of target along y-axis
+float32[4] q 			# Quaternion of landing target orientation (w, x, y, z order, zero-rotation is 1, 0, 0, 0)
+
+uint8 frame			# Coordinate frame used for following fields.
+uint8 type					# Type of landing target
+uint8 LANDING_TARGET_TYPE_LIGHT_BEACON = 0	# Landing target signaled by light beacon (ex: IR-LOCK)
+uint8 LANDING_TARGET_TYPE_RADIO_BEACON = 1	# Landing target signaled by radio beacon (ex: ILS, NDB)
+uint8 LANDING_TARGET_TYPE_VISION_FIDUCIAL = 2	# Landing target represented by a fiducial marker (ex: ARTag)
+uint8 LANDING_TARGET_TYPE_VISION_OTHER = 3	# Landing target represented by a pre-defined visual shape/feature (ex: X-marker, H-marker, square)

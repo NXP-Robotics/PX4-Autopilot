@@ -142,6 +142,14 @@ private:
 
 	struct {
 		hrt_abstime timestamp;
+		uint8_t frame;
+		uint8_t num;
+		uint8_t type;
+		float angle_x;
+		float angle_y;
+		float size_x;
+		float size_y;
+		float distance;
 		float rel_pos_x;
 		float rel_pos_y;
 		float rel_pos_z;
