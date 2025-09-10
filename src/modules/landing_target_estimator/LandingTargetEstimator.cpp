@@ -45,7 +45,8 @@
 
 #include "LandingTargetEstimator.h"
 
-#define SEC2USEC 1000000.0f
+#define SEC2USEC 	1000000.0f
+#define AOA_LIMIT	60.0f
 
 namespace landing_target_estimator
 {
