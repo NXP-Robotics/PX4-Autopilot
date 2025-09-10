@@ -187,3 +187,12 @@ PARAM_DEFINE_FLOAT(LTEST_SENS_POS_Y, 0.0f);
  *
  */
 PARAM_DEFINE_FLOAT(LTEST_SENS_POS_Z, 0.0f);
+
+/**
+ * Target yaw filter alpha value
+ *
+ * @min 0
+ * @max 100
+ * @group Landing target Estimator
+ */
+PARAM_DEFINE_FLOAT(LTEST_YAW_ALPHA, 0.05);

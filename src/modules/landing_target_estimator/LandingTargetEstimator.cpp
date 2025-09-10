@@ -61,10 +61,12 @@ LandingTargetEstimator::LandingTargetEstimator()
 	_paramHandle.scale_x = param_find("LTEST_SCALE_X");
 	_paramHandle.scale_y = param_find("LTEST_SCALE_Y");
 	_paramHandle.sensor_yaw = param_find("LTEST_SENS_ROT");
+	_paramHandle.yaw_alpha = param_find("LTEST_YAW_ALPHA");
 	_paramHandle.offset_x = param_find("LTEST_SENS_POS_X");
 	_paramHandle.offset_y = param_find("LTEST_SENS_POS_Y");
 	_paramHandle.offset_z = param_find("LTEST_SENS_POS_Z");
 	_check_params(true);
+	_alpha_filter_yaw.reset(NAN);
 }
 
 void LandingTargetEstimator::update()
@@ -117,6 +119,8 @@ void LandingTargetEstimator::update()
 		_kalman_filter_x.init(_target_position_report.rel_pos_x, vx_init, _params.pos_unc_init, _params.vel_unc_init);
 		_kalman_filter_y.init(_target_position_report.rel_pos_y, vy_init, _params.pos_unc_init, _params.vel_unc_init);
 
+		_alpha_filter_yaw.setParameters(sample_interval, 0.f);
+
 		_estimator_initialized = true;
 		_last_update = hrt_absolute_time();
 		_last_predict = _last_update;
@@ -126,6 +130,9 @@ void LandingTargetEstimator::update()
 		const float measurement_uncertainty = _params.meas_unc * _dist_z * _dist_z;
 		bool update_x = _kalman_filter_x.update(_target_position_report.rel_pos_x, measurement_uncertainty);
 		bool update_y = _kalman_filter_y.update(_target_position_report.rel_pos_y, measurement_uncertainty);
+
+		_alpha_filter_yaw.setAlpha(_params.yaw_alpha);
+		_alpha_filter_yaw.update(_last_unwrapped_yaw);
 
 		if (!update_x || !update_y) {
 			if (!_faulty) {
@@ -170,6 +177,14 @@ void LandingTargetEstimator::update()
 				_target_pose.y_abs = y + _vehicleLocalPosition.y;
 				_target_pose.z_abs = _target_position_report.rel_pos_z  + _vehicleLocalPosition.z;
 				_target_pose.abs_pos_valid = true;
+
+				// q should only be filled when abs_pos_valid is set
+				const float yaw_filterd_and_wrapped = matrix::wrap_pi(_alpha_filter_yaw.getState());
+				matrix::Quatf quaternion(matrix::Eulerf(0.f, 0.f, yaw_filterd_and_wrapped));
+				_target_pose.target_yaw_filtered = yaw_filterd_and_wrapped;
+				_target_pose.target_yaw = _last_unwrapped_yaw;
+				quaternion.copyTo(_target_pose.q);
+				_last_unwrapped_yaw = _target_pose.target_yaw;
 
 			} else {
 				_target_pose.abs_pos_valid = false;
@@ -303,8 +318,8 @@ void LandingTargetEstimator::_update_topics()
 		* The coordinates "rel_pos_*" are the position of the landing point relative to the vehicle.
 		* To change POV we negate rotate the position with Eulerangles[XYZ] = [-90 0 -90]:
 		* ******************************************/
-		const matrix::Quaternion<float> q_to_ned(0.0f, 0.7071068f, 0.0f, 0.7071068f);
-		const matrix::Quaternion<float> q_rotation = q_to_ned *  get_rot_quaternion(static_cast<enum Rotation>(_sensorUwb.orientation));
+		const matrix::Quaternion<float> q_to_ned_uwb(0.0f, 0.7071068f, 0.0f, 0.7071068f); //NED rotation for UWB
+		const matrix::Quaternion<float> q_rotation = q_to_ned_uwb *  get_rot_quaternion(static_cast<enum Rotation>(_sensorUwb.orientation));
 		matrix::Vector3f position = q_rotation.rotateVector(calc_cartesian(_sensorUwb.distance, _sensorUwb.aoa_azimuth_dev, _sensorUwb.aoa_elevation_dev));
 
 		// Now we have the Position of the landing spot in relation to the Drone in NED:
@@ -314,25 +329,16 @@ void LandingTargetEstimator::_update_topics()
 
 		/* Estimate Yaw offset to target*/
 		const float min_angle_for_target_yaw_estimation_sqrd = std::pow(0.1f,2);
-    	 	const float angle_update_factor=  0.03;
 		float target_yaw = 0.0f;
+
+		matrix::Vector3f target_vector = calc_cartesian(_sensorUwb.distance, _sensorUwb.aoa_azimuth_resp, _sensorUwb.aoa_elevation_resp);
 		//[1] Check if the data can be used to estimate the target yaw
 
 		if((std::pow(_sensorUwb.aoa_azimuth_resp, 2) + std::pow(_sensorUwb.aoa_elevation_resp, 2)) > min_angle_for_target_yaw_estimation_sqrd){
-
 			//[2] Estimate target yaw
-			float sensor_to_target_yaw = (float) atan2(position(1), position(0));//(float) atan2(target_pos_odom_frame.y - odom_to_sensor.transform.translation.y, target_pos_odom_frame.x - odom_to_sensor.transform.translation.x);
-			float target_to_sensor_yaw = (float) atan2(position(1), position(2));
-			float new_target_yaw = sensor_to_target_yaw + target_to_sensor_yaw + (float) M_PI;
-			//[3] Smooth the target yaw
-			if(target_yaw - new_target_yaw > (float) M_PI){
-				new_target_yaw += (float) M_PI * 2.f;
-			} else if(new_target_yaw - target_yaw > (float) M_PI){
-				target_yaw += (float) M_PI * 2.f;
-			}
-			target_yaw = target_yaw * (1.f - angle_update_factor) + new_target_yaw * angle_update_factor;
-			target_yaw = (float) fmod(target_yaw,  (float) M_PI * 2.f);
-
+			float sensor_to_target_yaw = (float) atan2(position(1), position(0));
+			float target_to_sensor_yaw = (float) atan2(target_vector(1), target_vector(0));
+			target_yaw =  (target_to_sensor_yaw - sensor_to_target_yaw) *  M_RAD_TO_DEG_F;
 		}
 		//[4] Update the rotation of the target transformation with the new target yaw
 		matrix::Quaternion<float> _q(matrix::Eulerf(0.f, 0.f, target_yaw));
@@ -362,6 +368,7 @@ void LandingTargetEstimator::_update_params()
 	int32_t sensor_yaw = 0;
 	param_get(_paramHandle.sensor_yaw, &sensor_yaw);
 	_params.sensor_yaw = static_cast<enum Rotation>(sensor_yaw);
+	param_get(_paramHandle.yaw_alpha, &_params.yaw_alpha);
 
 	param_get(_paramHandle.offset_x, &_params.offset_x);
 	param_get(_paramHandle.offset_y, &_params.offset_y);

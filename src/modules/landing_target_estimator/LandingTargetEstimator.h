@@ -60,6 +60,7 @@
 #include <mathlib/mathlib.h>
 #include <matrix/Matrix.hpp>
 #include <lib/conversion/rotation.h>
+#include <lib/mathlib/math/filter/AlphaFilter.hpp>
 #include "KalmanFilter.h"
 
 using namespace time_literals;
@@ -129,6 +130,7 @@ private:
 		param_t offset_y;
 		param_t offset_z;
 		param_t sensor_yaw;
+		param_t yaw_alpha;
 	} _paramHandle;
 
 	struct {
@@ -143,6 +145,7 @@ private:
 		float offset_y;
 		float offset_z;
 		enum Rotation sensor_yaw;
+		float yaw_alpha;
 	} _params;
 
 	struct {
@@ -190,6 +193,9 @@ private:
 	hrt_abstime _last_predict{0}; // timestamp of last filter prediction
 	hrt_abstime _last_update{0}; // timestamp of last filter update (used to check timeout)
 	float _dist_z{1.0f};
+	AlphaFilter<float> _alpha_filter_yaw; // poor man's orientation estimator
+	float _last_unwrapped_yaw{0.0f};
+	const float sample_interval = 1.0f;
 
 	void _check_params(const bool force);
 

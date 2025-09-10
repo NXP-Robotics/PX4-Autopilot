@@ -34,6 +34,9 @@ float32 size_x			# Size of target along x-axis
 float32 size_y			# Size of target along y-axis
 float32[4] q 			# Quaternion of landing target orientation (w, x, y, z order, zero-rotation is 1, 0, 0, 0)
 
+float32 target_yaw
+float32 target_yaw_filtered
+
 uint8 frame			# Coordinate frame used for following fields.
 uint8 type					# Type of landing target
 uint8 LANDING_TARGET_TYPE_LIGHT_BEACON = 0	# Landing target signaled by light beacon (ex: IR-LOCK)
