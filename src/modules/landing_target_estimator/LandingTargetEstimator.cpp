@@ -45,7 +45,8 @@
 
 #include "LandingTargetEstimator.h"
 
-#define SEC2USEC 1000000.0f
+#define SEC2USEC 	1000000.0f
+#define AOA_LIMIT	60.0f
 
 namespace landing_target_estimator
 {
@@ -279,8 +280,8 @@ void LandingTargetEstimator::_update_topics()
 		}
 
 		// First we need to catch angle measurements outside of the useable measuring range
-		if ( fabsf(uwb_report.aoa_azimuth_dev) > max_uwb_aoa_angle_degree ||
-	    		fabsf(uwb_report.aoa_elevation_dev) > max_uwb_aoa_angle_degree){
+		if (fabsf(_sensorUwb.aoa_azimuth_dev) > max_uwb_aoa_angle_degree||
+	    		fabsf(_sensorUwb.aoa_elevation_dev) > max_uwb_aoa_angle_degree) {
 			return;
 		}
 
