@@ -45,8 +45,7 @@
 
 #include "LandingTargetEstimator.h"
 
-#define SEC2USEC 	1000000.0f
-#define AOA_LIMIT	60.0f
+#define SEC2USEC 1000000.0f
 
 namespace landing_target_estimator
 {
@@ -172,7 +171,7 @@ void LandingTargetEstimator::update()
 			_target_pose.cov_vx_rel = covx_v;
 			_target_pose.cov_vy_rel = covy_v;
 
-			if (_vehicleLocalPosition_valid && _vehicleLocalPosition.xy_valid) {
+			if (_vehicleLocalPosition_valid) {
 				_target_pose.x_abs = x + _vehicleLocalPosition.x;
 				_target_pose.y_abs = y + _vehicleLocalPosition.y;
 				_target_pose.z_abs = _target_position_report.rel_pos_z  + _vehicleLocalPosition.z;
@@ -184,7 +183,8 @@ void LandingTargetEstimator::update()
 				_target_pose.target_yaw_filtered = yaw_filterd_and_wrapped;
 				_target_pose.target_yaw = _last_unwrapped_yaw;
 				quaternion.copyTo(_target_pose.q);
-				_last_unwrapped_yaw = _target_pose.target_yaw;
+				_last_unwrapped_yaw = _target_position_report.target_yaw;
+
 
 			} else {
 				_target_pose.abs_pos_valid = false;
@@ -327,6 +327,12 @@ void LandingTargetEstimator::_update_topics()
 		_target_position_report.rel_pos_y = position(1);
 		_target_position_report.rel_pos_z = position(2);
 
+
+
+		// also Catch Responder Angles that outside of the FOV.
+		if (fabsf(_sensorUwb.aoa_azimuth_resp) < max_uwb_aoa_angle_degree||
+	    		fabsf(_sensorUwb.aoa_elevation_resp) < max_uwb_aoa_angle_degree) {
+
 		/* Estimate Yaw offset to target*/
 		const float min_angle_for_target_yaw_estimation_sqrd = std::pow(0.1f,2);
 		float target_yaw = 0.0f;
@@ -340,12 +346,18 @@ void LandingTargetEstimator::_update_topics()
 			float target_to_sensor_yaw = (float) atan2(target_vector(1), target_vector(0));
 			target_yaw =  (target_to_sensor_yaw - sensor_to_target_yaw) *  M_RAD_TO_DEG_F;
 		}
-		//[4] Update the rotation of the target transformation with the new target yaw
-		matrix::Quaternion<float> _q(matrix::Eulerf(0.f, 0.f, target_yaw));
-		_target_position_report.q[0] = target_yaw; //fix before commit
-		_target_position_report.q[1] = _q(1);
-		_target_position_report.q[2] = _q(2);
-		_target_position_report.q[3] = _q(3);
+		_target_position_report.target_yaw = target_yaw;
+
+		if (PX4_ISFINITE(target_yaw)) {
+			// _last_unwrapped_yaw = unwrap(_last_unwrapped_yaw, target_yaw_ned, 0.0f, (float)M_PI);
+			_last_unwrapped_yaw = matrix::unwrap_pi(_last_unwrapped_yaw, target_yaw);
+
+			// Initialize yaw lowpass filter if necessary
+			if (!PX4_ISFINITE(_alpha_filter_yaw.getState())) {
+				_alpha_filter_yaw.reset(_last_unwrapped_yaw);
+			}
+		}
+		}
 
 		_new_irlockReport = true;
 	}

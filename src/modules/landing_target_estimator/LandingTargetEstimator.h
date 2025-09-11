@@ -162,6 +162,7 @@ private:
 		float rel_pos_y;
 		float rel_pos_z;
 		float q[4];
+		float target_yaw;
 	} _target_position_report;
 
 	uORB::Subscription _vehicleLocalPositionSub{ORB_ID(vehicle_local_position)};
