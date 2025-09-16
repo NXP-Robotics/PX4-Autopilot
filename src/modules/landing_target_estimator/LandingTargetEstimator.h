@@ -99,6 +99,8 @@ protected:
 
 	/* Valid AoA measurement range between -60.00° and +60.00° for UWB*/
 	static constexpr float max_uwb_aoa_angle_degree = 60.0f;
+	/* minimum angle for target yaw estimation sqrd*/
+	static constexpr float min_angle_for_target_yaw_estimation_sqrd = 0.1f * 0.1f;
 
 	uORB::Publication<landing_target_pose_s> _targetPosePub{ORB_ID(landing_target_pose)};
 	landing_target_pose_s _target_pose{};
@@ -130,6 +132,7 @@ private:
 		param_t offset_y;
 		param_t offset_z;
 		param_t sensor_yaw;
+		param_t yaw_switch;
 		param_t yaw_alpha;
 	} _paramHandle;
 
@@ -145,6 +148,7 @@ private:
 		float offset_y;
 		float offset_z;
 		enum Rotation sensor_yaw;
+		uint32_t yaw_switch;
 		float yaw_alpha;
 	} _params;
 
@@ -161,7 +165,6 @@ private:
 		float rel_pos_x;
 		float rel_pos_y;
 		float rel_pos_z;
-		float q[4];
 		float target_yaw;
 	} _target_position_report;
 
@@ -195,7 +198,6 @@ private:
 	hrt_abstime _last_update{0}; // timestamp of last filter update (used to check timeout)
 	float _dist_z{1.0f};
 	AlphaFilter<float> _alpha_filter_yaw; // poor man's orientation estimator
-	float _last_unwrapped_yaw{0.0f};
 	const float sample_interval = 1.0f;
 
 	void _check_params(const bool force);
