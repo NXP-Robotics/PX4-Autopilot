@@ -322,7 +322,7 @@ void LandingTargetEstimator::_update_topics()
 		* ******************************************/
 		const matrix::Quaternion<float> q_to_ned_uwb(0.0f, 0.7071068f, 0.0f, 0.7071068f); //NED rotation for UWB
 		matrix::Quaternion<float> q_att(&_vehicleAttitude.q[0]);
-		const matrix::Quaternion<float> q_rotation = q_att * q_to_ned_uwb *  get_rot_quaternion(static_cast<enum Rotation>(_sensorUwb.orientation));
+		matrix::Quaternion<float> q_rotation = q_att * q_to_ned_uwb * get_rot_quaternion(static_cast<enum Rotation>(_sensorUwb.orientation));
 		// rotate the unit ray into the navigation frame
 		matrix::Vector3f position = q_rotation.rotateVector(calc_cartesian(_sensorUwb.distance, _sensorUwb.aoa_azimuth_dev, _sensorUwb.aoa_elevation_dev));
 
@@ -342,7 +342,7 @@ void LandingTargetEstimator::_update_topics()
 				//[2] Estimate target yaw
 				float sensor_to_target_yaw = (float) atan2(position(1), position(0));
 				float target_to_sensor_yaw = (float) atan2(target_vector(1), target_vector(0));
-				_target_position_report.target_yaw = -(target_to_sensor_yaw - sensor_to_target_yaw);
+				_target_position_report.target_yaw = (target_to_sensor_yaw - sensor_to_target_yaw);
 			}
 
 			if (PX4_ISFINITE(_target_position_report.target_yaw)) {
