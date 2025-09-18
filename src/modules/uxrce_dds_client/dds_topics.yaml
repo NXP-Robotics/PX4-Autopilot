@@ -38,8 +38,8 @@ publications:
   - topic: /fmu/out/message_format_response
     type: px4_msgs::msg::MessageFormatResponse
 
-#  - topic: /fmu/out/position_setpoint_triplet
-#    type: px4_msgs::msg::PositionSetpointTriplet
+  - topic: /fmu/out/position_setpoint_triplet
+    type: px4_msgs::msg::PositionSetpointTriplet
 
   - topic: /fmu/out/sensor_combined
     type: px4_msgs::msg::SensorCombined
@@ -109,6 +109,9 @@ subscriptions:
 
   - topic: /fmu/in/onboard_computer_status
     type: px4_msgs::msg::OnboardComputerStatus
+
+  - topic: /fmu/in/mavlink_log
+    type: px4_msgs::msg::MavlinkLog
 
 #  - topic: /fmu/in/obstacle_distance
 #    type: px4_msgs::msg::ObstacleDistance
