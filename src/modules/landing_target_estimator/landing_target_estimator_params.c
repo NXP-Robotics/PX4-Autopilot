@@ -187,3 +187,26 @@ PARAM_DEFINE_FLOAT(LTEST_SENS_POS_Y, 0.0f);
  *
  */
 PARAM_DEFINE_FLOAT(LTEST_SENS_POS_Z, 0.0f);
+
+/**
+ * publish Relative YAW of the Drone
+ *
+ * @value 0 No relative YAW
+ * @value 1 Relative YAW published
+ *
+ * @min 0
+ * @max 1
+ * @boolean
+ * @reboot_required true
+ * @group Landing Target Estimator
+ */
+PARAM_DEFINE_INT32(LTEST_YAW_SWITCH, 0);
+
+/**
+ * Target yaw filter alpha value
+ *
+ * @min 0
+ * @max 100
+ * @group Landing target Estimator
+ */
+PARAM_DEFINE_FLOAT(LTEST_YAW_ALPHA, 0.05);

@@ -45,8 +45,7 @@
 
 #include "LandingTargetEstimator.h"
 
-#define SEC2USEC 	1000000.0f
-#define AOA_LIMIT	60.0f
+#define SEC2USEC 1000000.0f //Is there already a Constant defined for this?
 
 namespace landing_target_estimator
 {
@@ -61,10 +60,14 @@ LandingTargetEstimator::LandingTargetEstimator()
 	_paramHandle.scale_x = param_find("LTEST_SCALE_X");
 	_paramHandle.scale_y = param_find("LTEST_SCALE_Y");
 	_paramHandle.sensor_yaw = param_find("LTEST_SENS_ROT");
+	_paramHandle.yaw_switch = param_find("LTEST_YAW_SWITCH");
+	_paramHandle.yaw_alpha = param_find("LTEST_YAW_ALPHA");
 	_paramHandle.offset_x = param_find("LTEST_SENS_POS_X");
 	_paramHandle.offset_y = param_find("LTEST_SENS_POS_Y");
 	_paramHandle.offset_z = param_find("LTEST_SENS_POS_Z");
+
 	_check_params(true);
+	_alpha_filter_yaw.reset(NAN);
 }
 
 void LandingTargetEstimator::update()
@@ -117,6 +120,8 @@ void LandingTargetEstimator::update()
 		_kalman_filter_x.init(_target_position_report.rel_pos_x, vx_init, _params.pos_unc_init, _params.vel_unc_init);
 		_kalman_filter_y.init(_target_position_report.rel_pos_y, vy_init, _params.pos_unc_init, _params.vel_unc_init);
 
+		_alpha_filter_yaw.setParameters(sample_interval, 0.f);
+
 		_estimator_initialized = true;
 		_last_update = hrt_absolute_time();
 		_last_predict = _last_update;
@@ -126,6 +131,9 @@ void LandingTargetEstimator::update()
 		const float measurement_uncertainty = _params.meas_unc * _dist_z * _dist_z;
 		bool update_x = _kalman_filter_x.update(_target_position_report.rel_pos_x, measurement_uncertainty);
 		bool update_y = _kalman_filter_y.update(_target_position_report.rel_pos_y, measurement_uncertainty);
+
+		_alpha_filter_yaw.setAlpha(_params.yaw_alpha);
+		_alpha_filter_yaw.update(_target_position_report.target_yaw);
 
 		if (!update_x || !update_y) {
 			if (!_faulty) {
@@ -170,6 +178,15 @@ void LandingTargetEstimator::update()
 				_target_pose.y_abs = y + _vehicleLocalPosition.y;
 				_target_pose.z_abs = _target_position_report.rel_pos_z  + _vehicleLocalPosition.z;
 				_target_pose.abs_pos_valid = true;
+
+				if(_params.yaw_switch){
+					// q should only be filled when abs_pos_valid is set
+					const float yaw_filterd_and_wrapped = matrix::wrap_pi(_alpha_filter_yaw.getState());
+					matrix::Quatf quaternion(matrix::Eulerf(0.f, 0.f, yaw_filterd_and_wrapped));
+					_target_pose.target_yaw_filtered = yaw_filterd_and_wrapped;
+					_target_pose.target_yaw = _target_position_report.target_yaw;
+					quaternion.copyTo(_target_pose.q);
+				}
 
 			} else {
 				_target_pose.abs_pos_valid = false;
@@ -294,51 +311,49 @@ void LandingTargetEstimator::_update_topics()
 		_target_position_report.size_x  = _sensorUwb.aoa_elevation_resp;
 		_target_position_report.size_y = _sensorUwb.aoa_azimuth_resp;
 		_target_position_report.distance = _sensorUwb.distance;
-		//_target_position_report.q;
 
+		//Create Rotation vector for Sensor Rotation and Transformation to NED target relative to Drone.
 		/* ****** Position algorithm ************************************
-		 * this algorithm takes distance and angle measurements (spherical coordinates) and converts them into the cartesian bodyframe expected by the LTE
-		 * Convert spherical coordinates to cartesian: sph(r, phi, theta) => cartesian(x,y,z)
-		 * With radial distance r, elevation angle theta, azimuth angle phi
-		 *
-		 * position =   ( r * cos(elevation) * cos(azimuth),
-		 * 		( r * cos(elevation) * sin(azimuth),
-		 * 		( r * sin(elevation) )
-		 *
-		 * The resulting coordinate system is not NED (north-east-down)
-		 * Using the angle information from the drone device results in a position where the Drone is centered at [0, 0, 0] in NED.
-		 * ||Using the angle information from the destination device results in a position where the ground device is centered at [0, 0, 0] in NED.||
-		 * The coordinates "rel_pos_*" are the position of the landing point relative to the vehicle.
-		 * To change POV we negate rotate the position with Eulerangles[XYZ] = [-90 0 -90]:
-		 *
-		 * rotation_matrix = (0, 1, 0,
-					0, 0, -1;
-					1, 0, 0);
-		 *
-		 * This step can also be skipped if we rearrange the position calculation like this:
-		 * 	X -> Z
-		 * 	Y -> X
-		 * 	Z -> Y
-		 * Resulting in the following conversion function:
-		 * ******************************************/
-		matrix::Vector3f position = matrix::Vector3f{
-			(_sensorUwb.distance * sinf(math::radians(_sensorUwb.aoa_elevation_dev))),
-			(-_sensorUwb.distance * sinf(math::radians(_sensorUwb.aoa_azimuth_dev)) * cosf(math::radians(_sensorUwb.aoa_elevation_dev))),
-			(_sensorUwb.distance * cosf(math::radians(_sensorUwb.aoa_azimuth_dev)) * cosf(math::radians(_sensorUwb.aoa_elevation_dev)))};
-
-		// Now the position is the landing point relative to the vehicle.
-		//Rotate around orientation off the initiator:
-		position = get_rot_matrix(static_cast<enum Rotation>(_sensorUwb.orientation)) *
-			   position; //cast the orientation to Rotation enum
-		// And add the initiator offset:
-		position +=  matrix::Vector3f(_sensorUwb.offset_x,  _sensorUwb.offset_y,  _sensorUwb.offset_z);
-
-
+		* The resulting coordinate system is not NED (north-east-down)
+		* Using the angle information from the drone device results in a position where the Drone is centered at [0, 0, 0] in NED.
+		* ||Using the angle information from the destination device results in a position where the ground device is centered at [0, 0, 0] in NED.||
+		* The coordinates "rel_pos_*" are the position of the landing point relative to the vehicle.
+		* To change POV we negate rotate the position with Eulerangles[XYZ] = [-90 0 -90]:
+		* ******************************************/
+		const matrix::Quaternion<float> q_to_ned_uwb(0.0f, 0.7071068f, 0.0f, 0.7071068f); //NED rotation for UWB
+		matrix::Quaternion<float> q_att(&_vehicleAttitude.q[0]);
+		matrix::Quaternion<float> q_rotation = q_att * q_to_ned_uwb * get_rot_quaternion(static_cast<enum Rotation>(_sensorUwb.orientation));
+		// rotate the unit ray into the navigation frame
+		matrix::Vector3f position = q_rotation.rotateVector(calc_cartesian(_sensorUwb.distance, _sensorUwb.aoa_azimuth_dev, _sensorUwb.aoa_elevation_dev));
 
 		// Now we have the Position of the landing spot in relation to the Drone in NED:
 		_target_position_report.rel_pos_x = position(0);
 		_target_position_report.rel_pos_y = position(1);
 		_target_position_report.rel_pos_z = position(2);
+
+		// also Catch Responder Angles that outside of the FOV.
+		if (fabsf(_sensorUwb.aoa_azimuth_resp) < max_uwb_aoa_angle_degree||
+	    		fabsf(_sensorUwb.aoa_elevation_resp) < max_uwb_aoa_angle_degree) {
+
+			/* Estimate Yaw offset to target*/
+			matrix::Vector3f target_vector = calc_cartesian(_sensorUwb.distance, _sensorUwb.aoa_azimuth_resp, _sensorUwb.aoa_elevation_resp);
+			//[1] Check if the data can be used to estimate the target yaw
+			if((std::pow(_sensorUwb.aoa_azimuth_resp, 2) + std::pow(_sensorUwb.aoa_elevation_resp, 2)) > min_angle_for_target_yaw_estimation_sqrd){
+				//[2] Estimate target yaw
+				float sensor_to_target_yaw = (float) atan2(position(1), position(0));
+				float target_to_sensor_yaw = (float) atan2(target_vector(1), target_vector(0));
+				_target_position_report.target_yaw = (target_to_sensor_yaw - sensor_to_target_yaw);
+			}
+
+			if (PX4_ISFINITE(_target_position_report.target_yaw)) {
+				_target_position_report.target_yaw = matrix::unwrap_pi(_target_position_report.target_yaw, _target_position_report.target_yaw);
+
+				// Initialize yaw lowpass filter if necessary
+				if (!PX4_ISFINITE(_alpha_filter_yaw.getState())) {
+					_alpha_filter_yaw.reset(_target_position_report.target_yaw);
+				}
+			}
+		}
 		_new_irlockReport = true;
 	}
 }
@@ -357,13 +372,31 @@ void LandingTargetEstimator::_update_params()
 	param_get(_paramHandle.scale_x, &_params.scale_x);
 	param_get(_paramHandle.scale_y, &_params.scale_y);
 
+	int32_t yaw_switch;
+	param_get(_paramHandle.yaw_switch, &yaw_switch);
+
 	int32_t sensor_yaw = 0;
 	param_get(_paramHandle.sensor_yaw, &sensor_yaw);
 	_params.sensor_yaw = static_cast<enum Rotation>(sensor_yaw);
+	param_get(_paramHandle.yaw_alpha, &_params.yaw_alpha);
 
 	param_get(_paramHandle.offset_x, &_params.offset_x);
 	param_get(_paramHandle.offset_y, &_params.offset_y);
 	param_get(_paramHandle.offset_z, &_params.offset_z);
 }
 
+matrix::Vector3f calc_cartesian(float r, float azimuth, float elevation){
+	/* ****** Position algorithm ************************************
+	* this algorithm takes distance and angle measurements (spherical coordinates) and converts them into the cartesian bodyframe expected by the LTE
+	* Convert spherical coordinates to cartesian: sph(r, phi, theta) => cartesian(x,y,z)
+	* With radial distance r, elevation angle theta, azimuth angle phi
+	*
+	* position =   ( r * cos(elevation) * cos(azimuth),
+	* 		( r * cos(elevation) * sin(azimuth),
+	* 		( r * sin(elevation) )
+	* ******************************************/
+  	return matrix::Vector3f{(r * cosf(math::radians(azimuth)) * cosf(math::radians(elevation))),
+			(r * sinf(math::radians(azimuth)) * cosf(math::radians(elevation))),
+			(r * sinf(math::radians(elevation)))};
+}
 } // namespace landing_target_estimator

@@ -60,12 +60,15 @@
 #include <mathlib/mathlib.h>
 #include <matrix/Matrix.hpp>
 #include <lib/conversion/rotation.h>
+#include <lib/mathlib/math/filter/AlphaFilter.hpp>
 #include "KalmanFilter.h"
 
 using namespace time_literals;
 
 namespace landing_target_estimator
 {
+
+matrix::Vector3f calc_cartesian(float r, float azimuth, float elevation);
 
 class LandingTargetEstimator
 {
@@ -96,6 +99,8 @@ protected:
 
 	/* Valid AoA measurement range between -60.00° and +60.00° for UWB*/
 	static constexpr float max_uwb_aoa_angle_degree = 60.0f;
+	/* minimum angle for target yaw estimation sqrd*/
+	static constexpr float min_angle_for_target_yaw_estimation_sqrd = 0.1f * 0.1f;
 
 	uORB::Publication<landing_target_pose_s> _targetPosePub{ORB_ID(landing_target_pose)};
 	landing_target_pose_s _target_pose{};
@@ -127,6 +132,8 @@ private:
 		param_t offset_y;
 		param_t offset_z;
 		param_t sensor_yaw;
+		param_t yaw_switch;
+		param_t yaw_alpha;
 	} _paramHandle;
 
 	struct {
@@ -141,6 +148,8 @@ private:
 		float offset_y;
 		float offset_z;
 		enum Rotation sensor_yaw;
+		uint32_t yaw_switch;
+		float yaw_alpha;
 	} _params;
 
 	struct {
@@ -156,6 +165,7 @@ private:
 		float rel_pos_x;
 		float rel_pos_y;
 		float rel_pos_z;
+		float target_yaw;
 	} _target_position_report;
 
 	uORB::Subscription _vehicleLocalPositionSub{ORB_ID(vehicle_local_position)};
@@ -187,6 +197,8 @@ private:
 	hrt_abstime _last_predict{0}; // timestamp of last filter prediction
 	hrt_abstime _last_update{0}; // timestamp of last filter update (used to check timeout)
 	float _dist_z{1.0f};
+	AlphaFilter<float> _alpha_filter_yaw; // poor man's orientation estimator
+	const float sample_interval = 1.0f;
 
 	void _check_params(const bool force);
 
