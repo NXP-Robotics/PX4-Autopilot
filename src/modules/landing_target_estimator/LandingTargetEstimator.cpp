@@ -179,17 +179,22 @@ void LandingTargetEstimator::update()
 				_target_pose.z_abs = _target_position_report.rel_pos_z  + _vehicleLocalPosition.z;
 				_target_pose.abs_pos_valid = true;
 
-				if(_params.yaw_switch){
-					// q should only be filled when abs_pos_valid is set
-					const float yaw_filterd_and_wrapped = matrix::wrap_pi(_alpha_filter_yaw.getState());
-					matrix::Quatf quaternion(matrix::Eulerf(0.f, 0.f, yaw_filterd_and_wrapped));
-					_target_pose.target_yaw_filtered = yaw_filterd_and_wrapped;
-					_target_pose.target_yaw = _target_position_report.target_yaw;
-					quaternion.copyTo(_target_pose.q);
-				}
-
 			} else {
 				_target_pose.abs_pos_valid = false;
+			}
+
+
+			// q should only be filled when abs_pos_valid is set
+			const float yaw_filterd_and_wrapped = matrix::wrap_pi(_alpha_filter_yaw.getState());
+			matrix::Quatf quaternion(matrix::Eulerf(0.f, 0.f, yaw_filterd_and_wrapped));
+			_target_pose.target_yaw_filtered = yaw_filterd_and_wrapped;
+			_target_pose.target_yaw = _target_position_report.target_yaw;
+			quaternion.copyTo(_target_pose.q);
+
+			if(_params.yaw_switch && _target_pose.abs_pos_valid){
+				_target_pose.target_yaw_valid = true;
+			}else{
+				_target_pose.target_yaw_valid = false;
 			}
 
 			_target_pose.timestamp 	= _target_position_report.timestamp;

@@ -36,6 +36,7 @@ float32[4] q 			# Quaternion of landing target orientation (w, x, y, z order, ze
 
 float32 target_yaw
 float32 target_yaw_filtered
+bool 	target_yaw_valid
 
 uint8 frame			# Coordinate frame used for following fields.
 uint8 type					# Type of landing target
