@@ -197,7 +197,6 @@ PARAM_DEFINE_FLOAT(LTEST_SENS_POS_Z, 0.0f);
  * @min 0
  * @max 1
  * @boolean
- * @reboot_required true
  * @group Landing Target Estimator
  */
 PARAM_DEFINE_INT32(LTEST_YAW_SWITCH, 0);

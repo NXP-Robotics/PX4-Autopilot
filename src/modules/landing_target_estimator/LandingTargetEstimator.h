@@ -148,7 +148,7 @@ private:
 		float offset_y;
 		float offset_z;
 		enum Rotation sensor_yaw;
-		uint32_t yaw_switch;
+		int32_t yaw_switch;
 		float yaw_alpha;
 	} _params;
 

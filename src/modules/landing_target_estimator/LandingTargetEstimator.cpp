@@ -183,7 +183,6 @@ void LandingTargetEstimator::update()
 				_target_pose.abs_pos_valid = false;
 			}
 
-
 			// q should only be filled when abs_pos_valid is set
 			const float yaw_filterd_and_wrapped = matrix::wrap_pi(_alpha_filter_yaw.getState());
 			matrix::Quatf quaternion(matrix::Eulerf(0.f, 0.f, yaw_filterd_and_wrapped));
@@ -191,7 +190,7 @@ void LandingTargetEstimator::update()
 			_target_pose.target_yaw = _target_position_report.target_yaw;
 			quaternion.copyTo(_target_pose.q);
 
-			if(_params.yaw_switch && _target_pose.abs_pos_valid){
+			if(_params.yaw_switch){
 				_target_pose.target_yaw_valid = true;
 			}else{
 				_target_pose.target_yaw_valid = false;
@@ -376,9 +375,7 @@ void LandingTargetEstimator::_update_params()
 
 	param_get(_paramHandle.scale_x, &_params.scale_x);
 	param_get(_paramHandle.scale_y, &_params.scale_y);
-
-	int32_t yaw_switch;
-	param_get(_paramHandle.yaw_switch, &yaw_switch);
+	param_get(_paramHandle.yaw_switch, &_params.yaw_switch);
 
 	int32_t sensor_yaw = 0;
 	param_get(_paramHandle.sensor_yaw, &sensor_yaw);
