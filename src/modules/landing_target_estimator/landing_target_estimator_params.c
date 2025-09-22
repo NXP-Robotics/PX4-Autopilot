@@ -199,7 +199,7 @@ PARAM_DEFINE_FLOAT(LTEST_SENS_POS_Z, 0.0f);
  * @boolean
  * @group Landing Target Estimator
  */
-PARAM_DEFINE_INT32(LTEST_YAW_SWITCH, 0);
+// PARAM_DEFINE_INT32(LTEST_YAW_SWITCH, 0);
 
 /**
  * Target yaw filter alpha value
@@ -208,4 +208,4 @@ PARAM_DEFINE_INT32(LTEST_YAW_SWITCH, 0);
  * @max 100
  * @group Landing target Estimator
  */
-PARAM_DEFINE_FLOAT(LTEST_YAW_ALPHA, 0.05);
+// PARAM_DEFINE_FLOAT(LTEST_YAW_ALPHA, 0.05);
