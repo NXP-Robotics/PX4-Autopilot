@@ -272,7 +272,6 @@ PrecLand::run_state_horizontal_approach()
 	// if(_target_pose.target_yaw_valid){
 	// 	pos_sp_triplet->current.yaw = matrix::Eulerf(matrix::Quaternionf(_target_pose.q)).psi();
 	// }
-	pos_sp_triplet->current.valid = true;
 
 	_navigator->set_position_setpoint_triplet_updated();
 }
@@ -308,7 +307,6 @@ PrecLand::run_state_descend_above_target()
 	// if(_target_pose.target_yaw_valid){
 	// 	pos_sp_triplet->current.yaw = matrix::Eulerf(matrix::Quaternionf(_target_pose.q)).psi();
 	// }
-	pos_sp_triplet->current.valid = true;
 
 	_navigator->set_position_setpoint_triplet_updated();
 }

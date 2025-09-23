@@ -60,7 +60,6 @@
 #include <mathlib/mathlib.h>
 #include <matrix/Matrix.hpp>
 #include <lib/conversion/rotation.h>
-#include <lib/mathlib/math/filter/AlphaFilter.hpp>
 #include "KalmanFilter.h"
 
 using namespace time_literals;
