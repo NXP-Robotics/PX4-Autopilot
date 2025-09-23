@@ -60,14 +60,11 @@ LandingTargetEstimator::LandingTargetEstimator()
 	_paramHandle.scale_x = param_find("LTEST_SCALE_X");
 	_paramHandle.scale_y = param_find("LTEST_SCALE_Y");
 	_paramHandle.sensor_yaw = param_find("LTEST_SENS_ROT");
-	//_paramHandle.yaw_switch = param_find("LTEST_YAW_SWITCH");
-	//_paramHandle.yaw_alpha = param_find("LTEST_YAW_ALPHA");
 	_paramHandle.offset_x = param_find("LTEST_SENS_POS_X");
 	_paramHandle.offset_y = param_find("LTEST_SENS_POS_Y");
 	_paramHandle.offset_z = param_find("LTEST_SENS_POS_Z");
 
 	_check_params(true);
-	//_alpha_filter_yaw.reset(NAN);
 }
 
 void LandingTargetEstimator::update()
@@ -120,8 +117,6 @@ void LandingTargetEstimator::update()
 		_kalman_filter_x.init(_target_position_report.rel_pos_x, vx_init, _params.pos_unc_init, _params.vel_unc_init);
 		_kalman_filter_y.init(_target_position_report.rel_pos_y, vy_init, _params.pos_unc_init, _params.vel_unc_init);
 
-		// _alpha_filter_yaw.setParameters(sample_interval, 0.f);
-
 		_estimator_initialized = true;
 		_last_update = hrt_absolute_time();
 		_last_predict = _last_update;
@@ -131,9 +126,6 @@ void LandingTargetEstimator::update()
 		const float measurement_uncertainty = _params.meas_unc * _dist_z * _dist_z;
 		bool update_x = _kalman_filter_x.update(_target_position_report.rel_pos_x, measurement_uncertainty);
 		bool update_y = _kalman_filter_y.update(_target_position_report.rel_pos_y, measurement_uncertainty);
-
-		// _alpha_filter_yaw.setAlpha(_params.yaw_alpha);
-		// _alpha_filter_yaw.update(_target_position_report.target_yaw);
 
 		if (!update_x || !update_y) {
 			if (!_faulty) {
@@ -182,19 +174,6 @@ void LandingTargetEstimator::update()
 			} else {
 				_target_pose.abs_pos_valid = false;
 			}
-
-			// // q should only be filled when abs_pos_valid is set
-			// const float yaw_filterd_and_wrapped = matrix::wrap_pi(_alpha_filter_yaw.getState());
-			// matrix::Quatf quaternion(matrix::Eulerf(0.f, 0.f, yaw_filterd_and_wrapped));
-			// _target_pose.target_yaw_filtered = yaw_filterd_and_wrapped;
-			// _target_pose.target_yaw = _target_position_report.target_yaw;
-			// quaternion.copyTo(_target_pose.q);
-
-			// if(_params.yaw_switch){
-			// 	_target_pose.target_yaw_valid = true;
-			// }else{
-			// 	_target_pose.target_yaw_valid = false;
-			// }
 
 			_target_pose.timestamp 	= _target_position_report.timestamp;
 			_target_pose.frame 	= _target_position_report.frame;
@@ -335,30 +314,6 @@ void LandingTargetEstimator::_update_topics()
 		_target_position_report.rel_pos_y = position(1);
 		_target_position_report.rel_pos_z = position(2);
 
-		// also Catch Responder Angles that outside of the FOV.
-		// if (fabsf(_sensorUwb.aoa_azimuth_resp) < max_uwb_aoa_angle_degree||
-	    	// 	fabsf(_sensorUwb.aoa_elevation_resp) < max_uwb_aoa_angle_degree) {
-
-		// 	/* Estimate Yaw offset to target*/
-		// 	matrix::Vector3f target_vector = calc_cartesian(_sensorUwb.distance, _sensorUwb.aoa_azimuth_resp, _sensorUwb.aoa_elevation_resp);
-
-		// 	//[1] Check if the data can be used to estimate the target yaw
-		// 	if((std::pow(_sensorUwb.aoa_azimuth_resp, 2) + std::pow(_sensorUwb.aoa_elevation_resp, 2)) > min_angle_for_target_yaw_estimation_sqrd){
-		// 		//[2] Estimate target yaw
-		// 		float sensor_to_target_yaw = (float) atan2(position(1), position(0));
-		// 		float target_to_sensor_yaw = (float) atan2(target_vector(1), target_vector(0));
-		// 		_target_position_report.target_yaw = (target_to_sensor_yaw - sensor_to_target_yaw);
-		// 	}
-
-		// 	if (PX4_ISFINITE(_target_position_report.target_yaw)) {
-		// 		_target_position_report.target_yaw = matrix::unwrap_pi(_target_position_report.target_yaw, _target_position_report.target_yaw);
-
-		// 		// Initialize yaw lowpass filter if necessary
-		// 		if (!PX4_ISFINITE(_alpha_filter_yaw.getState())) {
-		// 			_alpha_filter_yaw.reset(_target_position_report.target_yaw);
-		// 		}
-		// 	}
-		// }
 		_new_irlockReport = true;
 	}
 }
@@ -376,12 +331,10 @@ void LandingTargetEstimator::_update_params()
 
 	param_get(_paramHandle.scale_x, &_params.scale_x);
 	param_get(_paramHandle.scale_y, &_params.scale_y);
-	//param_get(_paramHandle.yaw_switch, &_params.yaw_switch);
 
 	int32_t sensor_yaw = 0;
 	param_get(_paramHandle.sensor_yaw, &sensor_yaw);
 	_params.sensor_yaw = static_cast<enum Rotation>(sensor_yaw);
-	//param_get(_paramHandle.yaw_alpha, &_params.yaw_alpha);
 
 	param_get(_paramHandle.offset_x, &_params.offset_x);
 	param_get(_paramHandle.offset_y, &_params.offset_y);
