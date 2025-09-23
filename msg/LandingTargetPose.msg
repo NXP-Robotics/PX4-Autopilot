@@ -32,7 +32,7 @@ float32 angle_y			# y-axis angular offset of the target from the center of the i
 float32 distance		# Distance to the target from the vehicle
 float32 size_x			# Size of target along x-axis
 float32 size_y			# Size of target along y-axis
-float32[4] q 			# Quaternion of landing target orientation (w, x, y, z order, zero-rotation is 1, 0, 0, 0)
+float32[4] q 			# Quaternion of landing target orientation (w, x, y, z order, zero-rotation is 1, 0, 0, 0) in relation to the Drone
 
 uint8 frame			# Coordinate frame used for following fields.
 uint8 type					# Type of landing target

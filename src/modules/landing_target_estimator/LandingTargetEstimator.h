@@ -67,6 +67,8 @@ using namespace time_literals;
 namespace landing_target_estimator
 {
 
+matrix::Vector3f calc_cartesian(float r, float azimuth, float elevation);
+
 class LandingTargetEstimator
 {
 public:

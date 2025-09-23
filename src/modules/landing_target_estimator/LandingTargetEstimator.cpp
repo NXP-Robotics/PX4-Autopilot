@@ -45,8 +45,7 @@
 
 #include "LandingTargetEstimator.h"
 
-#define SEC2USEC 	1000000.0f
-#define AOA_LIMIT	60.0f
+#define SEC2USEC 1000000.0f //Is there already a Constant defined for this?
 
 namespace landing_target_estimator
 {
@@ -64,6 +63,7 @@ LandingTargetEstimator::LandingTargetEstimator()
 	_paramHandle.offset_x = param_find("LTEST_SENS_POS_X");
 	_paramHandle.offset_y = param_find("LTEST_SENS_POS_Y");
 	_paramHandle.offset_z = param_find("LTEST_SENS_POS_Z");
+
 	_check_params(true);
 }
 
@@ -294,51 +294,26 @@ void LandingTargetEstimator::_update_topics()
 		_target_position_report.size_x  = _sensorUwb.aoa_elevation_resp;
 		_target_position_report.size_y = _sensorUwb.aoa_azimuth_resp;
 		_target_position_report.distance = _sensorUwb.distance;
-		//_target_position_report.q;
 
+		//Create Rotation vector for Sensor Rotation and Transformation to NED target relative to Drone.
 		/* ****** Position algorithm ************************************
-		 * this algorithm takes distance and angle measurements (spherical coordinates) and converts them into the cartesian bodyframe expected by the LTE
-		 * Convert spherical coordinates to cartesian: sph(r, phi, theta) => cartesian(x,y,z)
-		 * With radial distance r, elevation angle theta, azimuth angle phi
-		 *
-		 * position =   ( r * cos(elevation) * cos(azimuth),
-		 * 		( r * cos(elevation) * sin(azimuth),
-		 * 		( r * sin(elevation) )
-		 *
-		 * The resulting coordinate system is not NED (north-east-down)
-		 * Using the angle information from the drone device results in a position where the Drone is centered at [0, 0, 0] in NED.
-		 * ||Using the angle information from the destination device results in a position where the ground device is centered at [0, 0, 0] in NED.||
-		 * The coordinates "rel_pos_*" are the position of the landing point relative to the vehicle.
-		 * To change POV we negate rotate the position with Eulerangles[XYZ] = [-90 0 -90]:
-		 *
-		 * rotation_matrix = (0, 1, 0,
-					0, 0, -1;
-					1, 0, 0);
-		 *
-		 * This step can also be skipped if we rearrange the position calculation like this:
-		 * 	X -> Z
-		 * 	Y -> X
-		 * 	Z -> Y
-		 * Resulting in the following conversion function:
-		 * ******************************************/
-		matrix::Vector3f position = matrix::Vector3f{
-			(_sensorUwb.distance * sinf(math::radians(_sensorUwb.aoa_elevation_dev))),
-			(-_sensorUwb.distance * sinf(math::radians(_sensorUwb.aoa_azimuth_dev)) * cosf(math::radians(_sensorUwb.aoa_elevation_dev))),
-			(_sensorUwb.distance * cosf(math::radians(_sensorUwb.aoa_azimuth_dev)) * cosf(math::radians(_sensorUwb.aoa_elevation_dev)))};
-
-		// Now the position is the landing point relative to the vehicle.
-		//Rotate around orientation off the initiator:
-		position = get_rot_matrix(static_cast<enum Rotation>(_sensorUwb.orientation)) *
-			   position; //cast the orientation to Rotation enum
-		// And add the initiator offset:
-		position +=  matrix::Vector3f(_sensorUwb.offset_x,  _sensorUwb.offset_y,  _sensorUwb.offset_z);
-
-
+		* The resulting coordinate system is not NED (north-east-down)
+		* Using the angle information from the drone device results in a position where the Drone is centered at [0, 0, 0] in NED.
+		* ||Using the angle information from the destination device results in a position where the ground device is centered at [0, 0, 0] in NED.||
+		* The coordinates "rel_pos_*" are the position of the landing point relative to the vehicle.
+		* To change POV we negate rotate the position with Eulerangles[XYZ] = [-90 0 -90]:
+		* ******************************************/
+		const matrix::Quaternion<float> q_to_ned_uwb(0.0f, 0.7071068f, 0.0f, 0.7071068f); //NED rotation for UWB
+		matrix::Quaternion<float> q_att(&_vehicleAttitude.q[0]);
+		matrix::Quaternion<float> q_rotation = q_att * q_to_ned_uwb * get_rot_quaternion(static_cast<enum Rotation>(_sensorUwb.orientation));
+		// rotate the unit ray into the navigation frame
+		matrix::Vector3f position = q_rotation.rotateVector(calc_cartesian(_sensorUwb.distance, _sensorUwb.aoa_azimuth_dev, _sensorUwb.aoa_elevation_dev));
 
 		// Now we have the Position of the landing spot in relation to the Drone in NED:
 		_target_position_report.rel_pos_x = position(0);
 		_target_position_report.rel_pos_y = position(1);
 		_target_position_report.rel_pos_z = position(2);
+
 		_new_irlockReport = true;
 	}
 }
@@ -366,4 +341,18 @@ void LandingTargetEstimator::_update_params()
 	param_get(_paramHandle.offset_z, &_params.offset_z);
 }
 
+matrix::Vector3f calc_cartesian(float r, float azimuth, float elevation){
+	/* ****** Position algorithm ************************************
+	* this algorithm takes distance and angle measurements (spherical coordinates) and converts them into the cartesian bodyframe expected by the LTE
+	* Convert spherical coordinates to cartesian: sph(r, phi, theta) => cartesian(x,y,z)
+	* With radial distance r, elevation angle theta, azimuth angle phi
+	*
+	* position =   ( r * cos(elevation) * cos(azimuth),
+	* 		( r * cos(elevation) * sin(azimuth),
+	* 		( r * sin(elevation) )
+	* ******************************************/
+  	return matrix::Vector3f{(r * cosf(math::radians(azimuth)) * cosf(math::radians(elevation))),
+			(r * sinf(math::radians(azimuth)) * cosf(math::radians(elevation))),
+			(r * sinf(math::radians(elevation)))};
+}
 } // namespace landing_target_estimator
