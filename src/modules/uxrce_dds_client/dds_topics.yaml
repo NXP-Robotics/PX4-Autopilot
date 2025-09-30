@@ -146,8 +146,8 @@ subscriptions:
   - topic: /fmu/in/vehicle_command
     type: px4_msgs::msg::VehicleCommand
 
-#  - topic: /fmu/in/vehicle_command_mode_executor
-#    type: px4_msgs::msg::VehicleCommand
+  - topic: /fmu/in/vehicle_command_mode_executor
+    type: px4_msgs::msg::VehicleCommand
 
 #  - topic: /fmu/in/vehicle_trajectory_bezier
 #    type: px4_msgs::msg::VehicleTrajectoryBezier
