@@ -17,6 +17,9 @@ publications:
   - topic: /fmu/out/arming_check_request
     type: px4_msgs::msg::ArmingCheckRequest
 
+  - topic: /fmu/out/event
+    type: px4_msgs::msg::Event
+
   - topic: /fmu/out/mode_completed
     type: px4_msgs::msg::ModeCompleted
 
@@ -34,6 +37,9 @@ publications:
 
 #  - topic: /fmu/out/manual_control_setpoint
 #    type: px4_msgs::msg::ManualControlSetpoint
+
+  # - topic: /fmu/out/mavlink_log
+  #   type: px4_msgs::msg::MavlinkLog
 
   - topic: /fmu/out/message_format_response
     type: px4_msgs::msg::MessageFormatResponse
@@ -146,8 +152,8 @@ subscriptions:
   - topic: /fmu/in/vehicle_command
     type: px4_msgs::msg::VehicleCommand
 
-#  - topic: /fmu/in/vehicle_command_mode_executor
-#    type: px4_msgs::msg::VehicleCommand
+  - topic: /fmu/in/vehicle_command_mode_executor
+    type: px4_msgs::msg::VehicleCommand
 
 #  - topic: /fmu/in/vehicle_trajectory_bezier
 #    type: px4_msgs::msg::VehicleTrajectoryBezier
