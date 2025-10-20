@@ -47,6 +47,9 @@ publications:
   - topic: /fmu/out/position_setpoint_triplet
     type: px4_msgs::msg::PositionSetpointTriplet
 
+  - topic: /fmu/out/rc_channels
+    type: px4_msgs::msg::RcChannels
+
   - topic: /fmu/out/sensor_combined
     type: px4_msgs::msg::SensorCombined
 
