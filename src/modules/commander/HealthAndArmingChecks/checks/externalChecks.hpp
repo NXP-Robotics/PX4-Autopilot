@@ -38,9 +38,7 @@
 #include <uORB/topics/arming_check_reply.h>
 #include <uORB/Subscription.hpp>
 #include <uORB/Publication.hpp>
-
-static_assert((1ull << arming_check_reply_s::HEALTH_COMPONENT_INDEX_AVOIDANCE) == (uint64_t)
-	      health_component_t::avoidance, "enum definition missmatch");
+#include <px4_platform_common/module_params.h>
 
 class ExternalChecks : public HealthAndArmingCheckBase
 {
@@ -72,6 +70,9 @@ private:
 	static constexpr hrt_abstime UPDATE_INTERVAL = 300_ms;
 	static_assert(REQUEST_TIMEOUT < UPDATE_INTERVAL, "keep timeout < update interval");
 	static constexpr int NUM_NO_REPLY_UNTIL_UNRESPONSIVE = 3; ///< Mode timeout = this value * UPDATE_INTERVAL
+	/// Timeout directly after registering (in some cases ROS can take a while until the subscription gets the first
+	/// sample, around 800ms was observed)
+	static constexpr int NUM_NO_REPLY_UNTIL_UNRESPONSIVE_INIT = 10;
 
 	void checkNonRegisteredModes(const Context &context, Report &reporter) const;
 
@@ -83,6 +84,7 @@ private:
 		int8_t nav_mode_id{-1}; ///< associated mode, -1 if none
 		int8_t replaces_nav_state{-1};
 
+		bool waiting_for_first_response{true};
 		uint8_t num_no_response{0};
 		bool unresponsive{false};
 		uint8_t total_num_unresponsive{0};
