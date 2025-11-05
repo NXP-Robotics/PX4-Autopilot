@@ -60,6 +60,13 @@
 #include <nuttx/mmcsd.h>
 #include <nuttx/analog/adc.h>
 #include <nuttx/mm/gran.h>
+
+#include "arm_internal.h"
+#include "imxrt_flexspi_nor_boot.h"
+#include <px4_arch/imxrt_flexspi_nor_flash.h>
+#include "imxrt_iomuxc.h"
+#include "imxrt_flexcan.h"
+#include "imxrt_enet.h"
 #include <chip.h>
 #include <stm32_uart.h>
 #include <arch/board/board.h>
@@ -69,6 +76,7 @@
 #include <drivers/drv_board_led.h>
 #include <systemlib/px4_macros.h>
 #include <px4_arch/io_timer.h>
+#include <px4_arch/imxrt_romapi.h>
 #include <px4_platform_common/init.h>
 #include <px4_platform_common/px4_manifest.h>
 #include <px4_platform/gpio.h>
@@ -149,8 +157,80 @@ __EXPORT void board_on_reset(int status)
 	}
 }
 
-/************************************************************************************
- * Name: stm32_boardinitialize
+/****************************************************************************
+ * Name: imxrt_flash_romapi_initialize
+ *
+ * Description:
+ *
+ ****************************************************************************/
+struct flexspi_nor_config_s g_bootConfig;
+
+locate_code(".ramfunc")
+void imxrt_flash_romapi_initialize(void)
+{
+	memcpy((struct flexspi_nor_config_s *)&g_bootConfig, &g_flash_config,
+	       sizeof(struct flexspi_nor_config_s));
+	g_bootConfig.memConfig.tag = FLEXSPI_CFG_BLK_TAG;
+
+	ROM_API_Init();
+
+	ROM_FLEXSPI_NorFlash_Init(NOR_INSTANCE, (struct flexspi_nor_config_s *)&g_bootConfig);
+	ROM_FLEXSPI_NorFlash_ClearCache(NOR_INSTANCE);
+
+	ARM_DSB();
+	ARM_ISB();
+	ARM_DMB();
+}
+
+locate_code(".ramfunc")
+void imxrt_flash_setup_prefetch_partition(void)
+{
+//Prefetch tuning to be determined
+#if 0
+	putreg32((uint32_t)&_srodata, IMXRT_FLEXSPI1_AHBBUFREGIONSTART0);
+	putreg32((uint32_t)&_erodata, IMXRT_FLEXSPI1_AHBBUFREGIONEND0);
+	/*putreg32((uint32_t)&_stext, IMXRT_FLEXSPI1_AHBBUFREGIONSTART1);
+	putreg32((uint32_t)&_etext, IMXRT_FLEXSPI1_AHBBUFREGIONEND1);
+	putreg32((uint32_t)&_stext, IMXRT_FLEXSPI1_AHBBUFREGIONSTART2);
+	putreg32((uint32_t)&_etext, IMXRT_FLEXSPI1_AHBBUFREGIONEND2);
+	putreg32((uint32_t)&_stext, IMXRT_FLEXSPI1_AHBBUFREGIONSTART3);
+	putreg32((uint32_t)&_etext, IMXRT_FLEXSPI1_AHBBUFREGIONEND3);*/
+#endif
+#if 0
+	struct flexspi_type_s *g_flexspi = (struct flexspi_type_s *)IMXRT_FLEXSPIC_BASE;
+	/* RODATA */
+	g_flexspi->AHBRXBUFCR0[0] = FLEXSPI_AHBRXBUFCR0_BUFSZ(48) |
+				    FLEXSPI_AHBRXBUFCR0_MSTRID(0) |
+				    FLEXSPI_AHBRXBUFCR0_PREFETCHEN(1) |
+				    FLEXSPI_AHBRXBUFCR0_REGIONEN(1);
+
+
+	/* All Text */
+	g_flexspi->AHBRXBUFCR0[1] = FLEXSPI_AHBRXBUFCR0_BUFSZ(80) |
+				    FLEXSPI_AHBRXBUFCR0_MSTRID(0) |
+				    FLEXSPI_AHBRXBUFCR0_PREFETCHEN(1) |
+				    FLEXSPI_AHBRXBUFCR0_REGIONEN(1);
+
+	/* Disable 2 */
+	g_flexspi->AHBRXBUFCR0[2] = FLEXSPI_AHBRXBUFCR0_BUFSZ(0) |
+				    FLEXSPI_AHBRXBUFCR0_MSTRID(0) |
+				    FLEXSPI_AHBRXBUFCR0_PREFETCHEN(1) |
+				    FLEXSPI_AHBRXBUFCR0_REGIONEN(0);
+
+	/* Disable 3 */
+	g_flexspi->AHBRXBUFCR0[3] = FLEXSPI_AHBRXBUFCR0_BUFSZ(0) |
+				    FLEXSPI_AHBRXBUFCR0_MSTRID(0) |
+				    FLEXSPI_AHBRXBUFCR0_PREFETCHEN(1) |
+				    FLEXSPI_AHBRXBUFCR0_REGIONEN(0);
+#endif
+
+	ARM_DSB();
+	ARM_ISB();
+	ARM_DMB();
+}
+
+/****************************************************************************
+ * Name: imxrt_boardinitialize
  *
  * Description:
  *   All STM32 architectures must provide the following entry point.  This entry point
@@ -162,6 +242,10 @@ __EXPORT void board_on_reset(int status)
 __EXPORT void
 stm32_boardinitialize(void)
 {
+	imxrt_flash_setup_prefetch_partition();
+
+	imxrt_flash_romapi_initialize();
+
 	board_on_reset(-1); /* Reset PWM first thing */
 
 	/* configure LEDs */
@@ -173,11 +257,7 @@ stm32_boardinitialize(void)
 	const uint32_t gpio[] = PX4_GPIO_INIT_LIST;
 	px4_gpio_init(gpio, arraySize(gpio));
 
-	/* configure USB interfaces */
-
-	stm32_usbinitialize();
-
-	VDD_3V3_ETH_POWER_EN(true);
+	imxrt_usb_initialize();
 
 }
 
@@ -208,7 +288,11 @@ stm32_boardinitialize(void)
 
 __EXPORT int board_app_initialize(uintptr_t arg)
 {
+	int ret = OK;
+
 #if !defined(BOOTLOADER)
+
+	imxrt_flexio_clocking();
 
 	/* Power on Interfaces */
 	VDD_3V3_SD_CARD_EN(true);
@@ -217,33 +301,11 @@ __EXPORT int board_app_initialize(uintptr_t arg)
 	VDD_3V3_SENSORS4_EN(true);
 	VDD_3V3_SPEKTRUM_POWER_EN(true);
 
-	/* Need hrt running before using the ADC */
-
 	px4_platform_init();
 
-	// Use the default HW_VER_REV(0x0,0x0) for Ramtron
+	imxrt_spiinitialize();
 
-	stm32_spiinitialize();
-
-	/* Configure the HW based on the manifest */
-
-	px4_platform_configure();
-
-	if (OK == board_determine_hw_info()) {
-		syslog(LOG_INFO, "[boot] Rev 0x%1x : Ver 0x%1x %s\n", board_get_hw_revision(), board_get_hw_version(),
-		       board_get_hw_type_name());
-
-	} else {
-		syslog(LOG_ERR, "[boot] Failed to read HW revision and version\n");
-	}
-
-	/* Configure the Actual SPI interfaces (after we determined the HW version)  */
-
-	stm32_spiinitialize();
-
-	board_spi_reset(10, 0xffff);
-
-	/* Configure the DMA allocator */
+	/* configure the DMA allocator */
 
 	if (board_dma_alloc_init() < 0) {
 		syslog(LOG_ERR, "[boot] DMA alloc FAILED\n");
@@ -255,20 +317,30 @@ __EXPORT int board_app_initialize(uintptr_t arg)
 	hrt_call_every(&serial_dma_call, 1000, 1000, (hrt_callout)stm32_serial_dma_poll, NULL);
 #  endif
 
-	/* initial LED state */
-	drv_led_start();
-	led_off(LED_RED);
-	led_on(LED_GREEN); // Indicate Power.
-	led_off(LED_BLUE);
+#if defined(CONFIG_IMXRT_USDHC)
+	ret = fmurt1062_usdhc_initialize();
+#endif
 
-	if (board_hardfault_init(2, true) != 0) {
-		led_on(LED_RED);
+	imxrt_spiinitialize();
+
+	board_spi_reset(10, 0xffff);
+
+#ifdef CONFIG_IMXRT_ENET
+	imxrt_netinitialize(0);
+#endif
+
+#ifdef CONFIG_IMXRT_FLEXCAN3
+	imxrt_caninitialize(3);
+#endif
+
+	ret = imxrt_flexspi_storage_initialize();
+
+	if (ret < 0) {
+		syslog(LOG_ERR,
+		       "ERROR: imxrt_flexspi_nor_initialize failed: %d\n", ret);
 	}
 
-	// Ensure Power is off for > 10 mS
-	usleep(15 * 1000);
-	VDD_3V3_SD_CARD_EN(true);
-	usleep(500 * 1000);
+#endif /* !defined(BOOTLOADER) */
 
 #  ifdef CONFIG_MMCSD
 	int ret = stm32_sdio_initialize();

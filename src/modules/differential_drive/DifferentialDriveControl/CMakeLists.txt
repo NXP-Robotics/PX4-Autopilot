@@ -35,5 +35,15 @@ px4_add_library(DifferentialDriveControl
 	DifferentialDriveControl.cpp
 )
 
-target_link_libraries(DifferentialDriveControl PUBLIC pid)
-target_include_directories(DifferentialDriveControl PUBLIC ${CMAKE_CURRENT_SOURCE_DIR})
+# Force compiler not to use builtin functions (like memcpy)
+# to optimize for loops in init.c (imxrt_ocram_initialize)
+set_source_files_properties(imxrt_ocram_initialize.c PROPERTIES COMPILE_FLAGS -fno-builtin)
+
+target_link_libraries(drivers_board
+	PRIVATE
+		arch_board_romapi
+		arch_spi
+		nuttx_arch # sdio
+		nuttx_drivers # sdio
+		px4_layer
+)
