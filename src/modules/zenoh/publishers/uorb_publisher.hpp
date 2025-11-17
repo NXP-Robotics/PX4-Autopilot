@@ -66,7 +66,7 @@ public:
 	~uORB_Zenoh_Publisher() override = default;
 
 	// Update the uORB Subscription and broadcast a Zenoh ROS2 message
-	virtual int8_t update() override
+	virtual z_result_t update() override
 	{
 		uint8_t data[_uorb_meta->o_size];
 		orb_copy(_uorb_meta, _uorb_sub, data);

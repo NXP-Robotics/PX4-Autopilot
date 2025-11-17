@@ -42,7 +42,25 @@ set(BUILD_SHARED_LIBS OFF)
 set(BUILD_TESTING OFF)
 set(CHECK_THREADS NO)
 set(MESSAGE_QUIET ON)
-set(ZENOH_DEBUG ${CONFIG_ZENOH_DEBUG})
+set(ZENOH_DEBUG ${CONFIG_ZENOH_DEBUG} CACHE STRING "Debug print level" FORCE)
+set(PICO_STATIC ON)
+if(NOT DEFINED CONFIG_NET_TCPPROTO_OPTIONS AND CONFIG_PLATFORM_NUTTX)
+    set(Z_FEATURE_TCP_NODELAY 0 CACHE STRING "Toggle TCP_NODELAY")
+endif()
+
+if(NOT DEFINED CONFIG_PTHREAD_MUTEX_TYPES AND CONFIG_PLATFORM_NUTTX)
+    message( SEND_ERROR "Pthread mutex is diabled, Zenoh will not function." )
+endif()
+
+# Match ROS2 rmw_zenoh settings
+set(Z_TRANSPORT_LEASE 60000 CACHE STRING "Link lease duration in milliseconds to announce to other zenoh nodes")
+set(Z_TRANSPORT_LEASE_EXPIRE_FACTOR 2 CACHE STRING "Link lease duration in milliseconds to announce to other zenoh nodes")
+
+set(FRAG_MAX_SIZE 512 CACHE STRING "Use this to override the maximum size for fragmented messages")
+set(BATCH_UNICAST_SIZE 256 CACHE STRING "Use this to override the maximum unicast batch size")
+set(BATCH_MULTICAST_SIZE 256 CACHE STRING "Use this to override the maximum multicast batch size")
+
+set(Z_FEATURE_UNSTABLE_API 1 CACHE STRING "Toggle unstable Zenoh-C API")
 
 px4_add_git_submodule(TARGET git_zenoh-pico PATH "zenoh-pico")
 add_subdirectory(zenoh-pico)
@@ -53,9 +71,11 @@ target_compile_options(zenohpico PUBLIC -Wno-cast-align
 			-Wno-stringop-overflow
 			-Wno-stringop-truncation
 			-Wno-unused-result
-			-DZ_BATCH_SIZE_RX=512
-			-DZ_BATCH_SIZE_TX=512
-			-DZ_FRAG_MAX_SIZE=1024)
+			-Wno-type-limits
+			-Wno-unused-variable
+			-Wno-maybe-uninitialized
+			-Wno-conversion
+			-Wno-float-equal)
 
 if(CONFIG_PLATFORM_NUTTX)
     target_compile_options(zenohpico PRIVATE -DUNIX_NO_MULTICAST_IF)

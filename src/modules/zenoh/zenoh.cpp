@@ -107,7 +107,9 @@ void ZENOH::run()
 #ifdef Z_SUBSCRIBE
 	_sub_count =  z_config.getSubCount();
 	_zenoh_subscribers = (Zenoh_Subscriber **)malloc(sizeof(Zenoh_Subscriber *)*_sub_count);
-	{
+	memset(_zenoh_subscribers, 0x0, sizeof(Zenoh_Subscriber *)*_sub_count);
+
+	if (_zenoh_subscribers) {
 		char topic[TOPIC_INFO_SIZE];
 		char type[TOPIC_INFO_SIZE];
 		int instance_no;
@@ -116,8 +118,37 @@ void ZENOH::run()
 			z_config.getSubscriberMapping(topic, type);
 			_zenoh_subscribers[i] = genSubscriber(type);
 
-			if (_zenoh_subscribers[i] != 0) {
-				_zenoh_subscribers[i]->declare_subscriber(z_session_loan(&s), topic);
+				if (rihs_hash != NULL && _zenoh_subscribers[i] != 0 &&
+				    generate_rmw_zenoh_topic_keyexpr(topic, rihs_hash, type, keyexpr) > 0) {
+					_zenoh_subscribers[i]->declare_subscriber(_s, keyexpr);
+#ifdef CONFIG_ZENOH_RMW_LIVELINESS
+
+					if (generate_rmw_zenoh_topic_liveliness_keyexpr(&self_id, topic, rihs_hash, type, keyexpr, "MS") > 0) {
+						z_view_keyexpr_t ke;
+
+						if (z_view_keyexpr_from_str(&ke, keyexpr) < 0) {
+							PX4_ERR("%s is not a valid key expression\n", keyexpr);
+							return -1;
+						}
+
+						z_owned_liveliness_token_t token;
+
+						if (z_liveliness_declare_token(z_loan(_s), &token, z_loan(ke), NULL) < 0) {
+							PX4_ERR("Unable to create liveliness token!\n");
+							return -1;
+						}
+					}
+
+#endif
+
+				} else {
+					_zenoh_subscribers[i] = NULL;
+					PX4_ERR("Could not create a subscriber for type %s", type);
+				}
+
+			} else {
+				_zenoh_subscribers[i] = NULL;
+				PX4_ERR("Error parsing publisher config at index %i", i);
 			}
 
 
@@ -130,6 +161,8 @@ void ZENOH::run()
 #endif
 
 #ifdef Z_PUBLISH
+	_zenoh_publishers = (uORB_Zenoh_Publisher **)malloc(_pub_count * sizeof(uORB_Zenoh_Publisher *));
+	memset(_zenoh_publishers, 0x0, _pub_count * sizeof(uORB_Zenoh_Publisher *));
 
 	_pub_count =  z_config.getPubCount();
 	_zenoh_publishers = (uORB_Zenoh_Publisher **)malloc(_pub_count * sizeof(uORB_Zenoh_Publisher *));
@@ -144,15 +177,73 @@ void ZENOH::run()
 			z_config.getPublisherMapping(topic, type);
 			_zenoh_publishers[i] = genPublisher(type);
 
-			if (_zenoh_publishers[i] != 0) {
-				_zenoh_publishers[i]->declare_publisher(z_session_loan(&s), topic);
-				_zenoh_publishers[i]->setPollFD(&pfds[i]);
+				if (rihs_hash && _zenoh_publishers[i] != 0 &&
+				    generate_rmw_zenoh_topic_keyexpr(topic, rihs_hash, type, keyexpr) > 0) {
+					_zenoh_publishers[i]->declare_publisher(_s, keyexpr, (uint8_t *)&_px4_guid);
+					_zenoh_publishers[i]->setPollFD(&pfds[i]);
+#ifdef CONFIG_ZENOH_RMW_LIVELINESS
+
+					if (generate_rmw_zenoh_topic_liveliness_keyexpr(&self_id, topic, rihs_hash, type, keyexpr, "MP") > 0) {
+						z_view_keyexpr_t ke;
+
+						if (z_view_keyexpr_from_str(&ke, keyexpr) < 0) {
+							PX4_ERR("%s is not a valid key expression\n", keyexpr);
+							return -1;
+						}
+
+						z_owned_liveliness_token_t token;
+
+						if (z_liveliness_declare_token(z_loan(_s), &token, z_loan(ke), NULL) < 0) {
+							PX4_ERR("Unable to create liveliness token!\n");
+							return -1;
+						}
+					}
+
+#endif
+
+				} else {
+					_zenoh_publishers[i] = NULL;
+					PX4_ERR("Could not create a publisher for type %s", type);
+				}
+
+			} else {
+				_zenoh_publishers[i] = NULL;
+				PX4_ERR("Error parsing publisher config at index %i", i);
 			}
 		}
 
 		if (z_config.getSubscriberMapping(topic, type) < 0) {
 			PX4_WARN("Publisher mapping parsing error");
 		}
+
+		_config.closePubSubMapping();
+	}
+
+#endif
+
+	return ret;
+}
+
+void ZENOH::run()
+{
+	z_result_t ret;
+	int i;
+	_pub_count =  _config.getPubCount();
+	_sub_count =  _config.getSubCount();
+	px4_pollfd_struct_t pfds[_pub_count];
+
+	if (setupSession() < 0) {
+		PX4_ERR("Failed to setup Zenoh session");
+		return;
+	}
+
+	connected = true;
+
+	PX4_INFO("Starting reading/writing tasks...");
+
+	if (setupTopics(pfds) < 0) {
+		PX4_ERR("Failed to setup topics");
+		return;
 	}
 
 	if (_pub_count == 0) {
@@ -201,7 +292,9 @@ void ZENOH::run()
 	zp_stop_read_task(z_session_loan(&s));
 	zp_stop_lease_task(z_session_loan(&s));
 
-	z_close(z_session_move(&s));
+	z_drop(z_session_move(&_s));
+
+	connected = false;
 	exit_and_cleanup();
 }
 
@@ -247,7 +340,12 @@ Zenoh demo bridge
 
 int ZENOH::print_status()
 {
-	PX4_INFO("running");
+	if (connected) {
+		PX4_INFO("Connected");
+
+	} else {
+		PX4_INFO("Connecting");
+	}
 
 	PX4_INFO("Publishers");
 
