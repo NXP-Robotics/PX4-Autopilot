@@ -176,7 +176,7 @@ bool FlightTaskAuto::update()
 	PositionSmoothing::PositionSmoothingSetpoints smoothed_setpoints;
 	_position_smoothing.generateSetpoints(
 		_position,
-		waypoints,
+		_position_setpoint,
 		_velocity_setpoint,
 		_deltatime,
 		force_zero_velocity_setpoint,
