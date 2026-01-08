@@ -443,7 +443,7 @@ bool FlightTaskAuto::_evaluateTriplets()
 		}
 
 		// If _triplet_target has updated, update also _triplet_prev_wp and _triplet_next_wp.
-		_prev_prev_wp = _triplet_prev_wp;
+		_prev_prev_wp = _triplet_prev_wp;   // NOT NEEDED
 
 		if (_isFinite(_sub_triplet_setpoint.get().previous) && _sub_triplet_setpoint.get().previous.valid) {
 			_reference_position.project(_sub_triplet_setpoint.get().previous.lat,
@@ -666,26 +666,28 @@ void FlightTaskAuto::_updateInternalWaypoints()
 	// 3. The vehicle is far from track -> go straight to closest point on track
 	switch (_current_state) {
 	case State::target_behind:
-		_target = _triplet_target;
+		printf("Target behind\n");
 		_prev_wp = _position;
+		_target = _triplet_target;
 		_next_wp = _triplet_next_wp;
 		break;
 
 	case State::previous_infront:
-		_next_wp = _triplet_target;
-		_target = _triplet_prev_wp;
+		printf("Previous infront\n");
 		_prev_wp = _position;
+		_target = _triplet_prev_wp;
+		_next_wp = _triplet_target;
 		break;
 
 	case State::offtrack:
-		_next_wp = _triplet_target;
-		_target = _closest_pt;
 		_prev_wp = _position;
+		_target = _triplet_target;
+		_next_wp = _triplet_next_wp;
 		break;
 
 	case State::none:
-		_target = _triplet_target;
 		_prev_wp = _triplet_prev_wp;
+		_target = _triplet_target;
 		_next_wp = _triplet_next_wp;
 		break;
 
