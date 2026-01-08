@@ -666,14 +666,12 @@ void FlightTaskAuto::_updateInternalWaypoints()
 	// 3. The vehicle is far from track -> go straight to closest point on track
 	switch (_current_state) {
 	case State::target_behind:
-		printf("Target behind\n");
 		_prev_wp = _position;
 		_target = _triplet_target;
 		_next_wp = _triplet_next_wp;
 		break;
 
 	case State::previous_infront:
-		printf("Previous infront\n");
 		_prev_wp = _position;
 		_target = _triplet_prev_wp;
 		_next_wp = _triplet_target;
