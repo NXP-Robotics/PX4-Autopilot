@@ -35,7 +35,7 @@
 
 HeadingSmoothing::HeadingSmoothing()
 {
-	_velocity_smoothing.setMaxVel(M_PI_F); // smoothed "velocity" is heading [-pi, pi]
+	_velocity_smoothing.setMaxVel(M_TWOPI_F); // "velocity" is heading. 2Pi limit is needed for correct angle wrapping
 }
 
 void HeadingSmoothing::reset(const float heading, const float heading_rate)
@@ -53,6 +53,6 @@ void HeadingSmoothing::update(const float heading_setpoint, const float time_ela
 	_velocity_smoothing.updateDurations(unwrapped_heading_setpoint);
 	_velocity_smoothing.updateTraj(time_elapsed);
 
-	const float wrapped_current_heading = getSmoothedHeading();
+	const float wrapped_current_heading =  matrix::wrap_pi(getSmoothedHeading());
 	_velocity_smoothing.setCurrentVelocity(wrapped_current_heading);
 }
