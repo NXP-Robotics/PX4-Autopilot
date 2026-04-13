@@ -29,6 +29,11 @@ def find_matching_brackets(brackets, s, verbose):
     raise Exception('Failed to find opening/closing brackets in {:}'.format(s))
 
 def extract_timer(line):
+    # Try format: initIOTimer(Timer::TPM3, 1000000UL),
+    search = re.search('Timer::(TPM[0-9]+)[,)]', line, re.IGNORECASE)
+    if search:
+        return search.group(1), 'imx9'
+
     # Try format: initIOTimer(Timer::Timer5, DMA{DMA::Index1, DMA::Stream0, DMA::Channel6}),
     search = re.search('Timer::([0-9a-zA-Z_]+)[,)]', line, re.IGNORECASE)
     if search:
@@ -53,6 +58,15 @@ def extract_timer_from_channel(line, timer_names):
         return str(timer_names.index((search.group(1) + '_' +  search.group(2))))
 
     return None
+
+def imx9_is_dshot(line):
+
+    # NXP imx9 format format: initIOTimerDshot(Timer::TPM3),
+    search = re.search('(initIOTimerDshot)', line, re.IGNORECASE)
+    if search:
+        return True
+
+    return False
 
 def imxrt_is_dshot(line):
 
@@ -90,6 +104,11 @@ def get_timer_groups(timer_config_file, verbose=False):
             if imxrt_is_dshot(line):
                 dshot_support[str(len(timers))] = True
             timers.append(str(len(timers)))
+        elif timer_type == 'imx9':
+            if verbose: print('imx9 timer found')
+            if imx9_is_dshot(line):
+                dshot_support[timer] = True
+            timers.append(timer)
         elif timer:
             if verbose: print('found timer def: {:}'.format(timer))
             dshot_support[timer] = 'DMA' in line

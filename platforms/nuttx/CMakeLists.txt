@@ -358,7 +358,8 @@ else()
 	)
 
 	target_link_libraries(nuttx_c INTERFACE nuttx_drivers)
-	target_link_libraries(nuttx_drivers INTERFACE nuttx_c nuttx_fs)
+	target_link_libraries(nuttx_drivers INTERFACE nuttx_c nuttx_fs nuttx_mm nuttx_openamp)
+	target_link_libraries(nuttx_openamp INTERFACE nuttx_drivers)
 	target_link_libraries(nuttx_xx INTERFACE nuttx_c)
 	target_link_libraries(nuttx_fs INTERFACE nuttx_c nuttx_mm)
 
@@ -639,7 +640,7 @@ if(NOT NUTTX_DIR MATCHES "external")
 		${CMAKE_SOURCE_DIR}/../svd/${DEBUG_SVD_FILE}
 	)
 
-	if(CONFIG_DEBUG_TCBINFO)
+	if(CONFIG_DEBUG_FEATURES)
 		# jlink-nuttx.so
 		add_custom_command(
 			OUTPUT ${NUTTX_DIR}/tools/jlink-nuttx.so

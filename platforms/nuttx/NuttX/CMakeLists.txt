@@ -236,6 +236,9 @@ if(CONFIG_NET)
 	add_nuttx_dir(net net y -D__KERNEL__ all)
 endif()
 
+add_nuttx_dir(openamp openamp y -D__KERNEL__ all)
+add_dependencies(nuttx_openamp nuttx_drivers)
+
 ###############################################################################
 # NuttX oldconfig: Update a configuration using a provided .config as base
 add_custom_target(oldconfig_nuttx

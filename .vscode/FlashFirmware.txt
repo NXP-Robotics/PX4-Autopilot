@@ -1,0 +1,5 @@
+usb 821006830
+si 1                                  // Select interface
+speed 4000                            // Select speed
+loadfile build/nxp_imx95_default/nxp_imx95_default.bin 0x28000000   // Load data file to flexspi offset
+exit
